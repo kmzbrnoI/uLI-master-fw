@@ -354,7 +354,7 @@ void CDCInitEP(void)
     len -     The number of BYTEs expected.
                                                                                    
   **********************************************************************************/
-BYTE getsUSBUSART(volatile ring_generic *buffer, BYTE len)
+BYTE getsUSBUSART(ring_generic *buffer, BYTE len)
 {
     cdc_rx_len = 0;
     
