@@ -65,6 +65,8 @@
 #pragma config EBTRB = OFF		// Boot Block Table Read Protection bit (Boot block not protected from table reads executed in other blocks)
 
 /** D E F I N E S ************************************************************/
+
+// TODO: check wheter there defined are necessary
 #define USB_msg_len(start)		((ring_USB_datain.data[start] & 0x0F)+2)	  // len WITH header byte and WITH xor byte
 #define USB_last_message_len	ringDistance(&ring_USB_datain, last_start, ring_USB_datain.ptr_e)
 
@@ -74,23 +76,20 @@
 
 #define USB_MAX_TIMEOUT                   10		// 100 ms
 #define USART_MAX_TIMEOUT                  2		// 20 ms
-#define TIMESLOT_MAX_TIMEOUT             500		// 5 s (according to specification)
-#define TIMESLOT_LONG_MAX_TIMEOUT       9000		// 1:30 min (according to specification)
-#define FERR_TIMEOUT                    1000		// 10 s
 
-#define MLED_IN_MAX_TIMEOUT                5		// 50 ms
-#define MLED_OUT_MAX_TIMEOUT               7        // 70 ms
-
-#define PWR_LED_SHORT_COUNT               15		// 150 ms
-#define PWR_LED_LONG_COUNT                40		// 400 ms
-#define PWR_LED_FERR_COUNT                10		// status led indicates >10 framing errors
+#define DEVICE_COUNT                      32
 
 /** V A R I A B L E S ********************************************************/
 #pragma udata
 char USB_Out_Buffer[32];
 
-ring_generic ring_USB_datain;
-ring_generic ring_USART_datain;
+// USART and USB buffers
+volatile ring_generic ring_USB_datain;
+volatile ring_generic ring_USART_datain;
+
+// attached devices
+volatile device devices[DEVICE_COUNT];
+volatile current current_dev;
 
 #pragma idata
 
@@ -316,7 +315,7 @@ void USBCBSuspend(void)
 	#endif
 
 	usb_configured = FALSE;
-	mLED_Out_On();
+	//mLED_Out_On();
 	ringClear(&ring_USART_datain);
 	ringClear(&ring_USB_datain);
 }
@@ -324,7 +323,7 @@ void USBCBSuspend(void)
 void USBCBWakeFromSuspend(void)
 {
 	usb_configured = TRUE;
-	mLED_Out_Off();
+	//mLED_Out_Off();
 }
 
 void USBCB_SOF_Handler(void)
@@ -351,7 +350,7 @@ void USBCBInitEP(void)
 {
 	CDCInitEP();
 	usb_configured = TRUE;
-	mLED_Out_Off();
+	//mLED_Out_Off();
 }
 
 void USBCBSendResume(void)
