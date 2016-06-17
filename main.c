@@ -67,12 +67,14 @@
 /** D E F I N E S ************************************************************/
 
 // TODO: check wheter there defined are necessary
-#define USB_msg_len(start)		((ring_USB_datain.data[start] & 0x0F)+2)	  // len WITH header byte and WITH xor byte
+#define USB_header(buf, start)  ((start+1)&buf.max)
+#define USB_msg_len(header)		((ring_USB_datain.data[header] & 0x0F)+3)	  // len WITH header byte, WITH xor byte and WITH call byte
 #define USB_last_message_len	ringDistance(&ring_USB_datain, last_start, ring_USB_datain.ptr_e)
 
 #define USART_msg_len(start)	((ring_USART_datain.data[(start+1) & ring_USART_datain.max] & 0x0F)+3)	// length of xpressnet message is 4-lower bits in second byte
 #define USART_last_message_len	ringDistance(&ring_USART_datain, last_start, ring_USART_datain.ptr_e)
-#define USART_msg_to_send		((ringLength(&ring_USB_datain) >= 2) && (ringLength(&ring_USB_datain) >= USB_msg_len(ring_USB_datain.ptr_b)))
+//#define USART_msg_to_send		((ringLength(&ring_USB_datain) >= 2) && (ringLength(&ring_USB_datain) >= USB_msg_len(ring_USB_datain.ptr_b)))
+ // TODO: fix USB_msg_len
 
 #define USB_MAX_TIMEOUT                   10		// 100 ms
 #define USART_MAX_TIMEOUT                  2		// 20 ms
@@ -114,7 +116,7 @@ void USART_receive(void);
 void USART_send(void);
 void USB_send(void);
 void USB_receive(void);
-BOOL USB_parse_data(BYTE start, BYTE len);
+void parse_command_for_master(BYTE start, BYTE len);
 BYTE calc_xor(BYTE* data, BYTE len);
 void Timer2(void);
 void ProcessIO(void);
@@ -454,15 +456,13 @@ void USB_receive(void)
 	if(mUSBUSARTIsTxTrfReady())
 	{
 		// ring_USB_datain overflow check
-		// 2 bytes in the buffer are always reserved for the Acknowledgement
-		// response.
-		if (ringFreeSpace(&ring_USB_datain) < 2) {
+		if (ringFull(&ring_USB_datain)) {
 			// delete last message
 			ring_USB_datain.ptr_e = last_start;
 			if (ring_USB_datain.ptr_b == ring_USB_datain.ptr_e) ring_USART_datain.empty = TRUE;
 			
-			// inform PC about full buffer
-			//respondBufferFull();
+			// TODO: inform PC about full buffer
+			//respond_buffer_full();
 			
 			return;
 		}
@@ -475,63 +475,54 @@ void USB_receive(void)
 				usb_timeout = 0;
 				if (ring_USB_datain.ptr_e == ring_USB_datain.ptr_b) ring_USB_datain.empty = TRUE;
 				
-				// inform PC about timeout
-				USB_Out_Buffer[0] = 0x01;
-				USB_Out_Buffer[1] = 0x01;
-				USB_Out_Buffer[2] = 0x00;
-				if (mUSBUSARTIsTxTrfReady()) putUSBUSART(USB_Out_Buffer, 3);
+				// TODO: inform PC about timeout
+                // repond_usb_timeout();
 			}
 			return;
 		}
 		usb_timeout = 0;
 				
 		// data received -> parse data
-		while ((ringDistance(&ring_USB_datain, last_start, ring_USB_datain.ptr_e) > 0) &&
-				(USB_last_message_len >= USB_msg_len(last_start))) {
+        // at least 3 bytes must be in buffer to start parsing
+        // (call byte + header byte + xor)
+		while ((ringDistance(&ring_USB_datain, last_start, ring_USB_datain.ptr_e) >= 3) &&
+				(USB_last_message_len >= USB_msg_len(USB_header(ring_USB_datain, last_start)))) {
 			
 			// whole message received -> check for xor
-			for (i = 0, xor = 0; i < USB_msg_len(last_start)-1; i++)
-				xor ^= ring_USB_datain.data[(i+last_start) & ring_USB_datain.max];
+			for (i = 0, xor = 0; i < USB_msg_len(USB_header(ring_USB_datain, last_start))-2; i++)
+				xor ^= ring_USB_datain.data[(i+last_start+1) & ring_USB_datain.max];
 			
-			if (xor != ring_USB_datain.data[(i+last_start) & ring_USB_datain.max]) {
+			if (xor != ring_USB_datain.data[(i+last_start+1) & ring_USB_datain.max]) {
 				// xor error
 				// here, we need to delete content in the middle of ring buffer
-				ringRemoveFromMiddle(&ring_USB_datain, last_start, USB_msg_len(last_start));
-				//respondXORerror();
+				ringRemoveFromMiddle(&ring_USB_datain, last_start, USB_msg_len(USB_header(ring_USB_datain, last_start)));
+				//TODO: respondXORerror();
 				return;
 			}
 			
 			// xor ok -> parse data
-			if (USB_parse_data(last_start, USB_msg_len(last_start))) {
-				// timeslot not available -> respond "Buffer full"
-				/*if (timeslot_err) {
-					ringRemoveFromMiddle(&ring_USB_datain, last_start, USB_msg_len(last_start));
-					respondBufferFull();
-					return;
-				}*/
-				
-				// data waiting for sending to xpressnet -> move last_start
-				last_start = (last_start+USB_msg_len(last_start))&ring_USB_datain.max;
-			}
+            if (((ring_USB_datain.data[last_start] >> 5) && 0b11) == 0b01) {
+                parse_command_for_master(last_start, USB_msg_len(USB_header(ring_USB_datain, last_start)));
+                last_start = (last_start+USB_msg_len(USB_header(ring_USB_datain, last_start)))&ring_USB_datain.max;                
+            } else {
+                // TODO: when usart is not ready, respond "USART not ready" here
+                // and remove data from buffer:
+                //   last_start = (last_start+USB_msg_len(USB_header(ring_USB_datain, last_start)))&ring_USB_datain.max;
+                return;
+            }			
 		}
 	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/* Parse data from USB
+/* Parse data intended for master.
  * \start and \len reference to ring_USB_datain.
- * \len is WITH header byte and WITH xor byte
- * Returns:
- *	TRUE if data is waiting for sending to xpressnet
- *	FALSE if data were processed
- * Achtung: you must delete data from ring_USB_datain if data were processed.
- * (otherwise the program will freeze)
+ * \len is WITH header byte, WITH xor byte and WITH call byte
  */ 
 
-BOOL USB_parse_data(BYTE start, BYTE len)
+void parse_command_for_master(BYTE start, BYTE len)
 {
     // TODO
-	return TRUE;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
