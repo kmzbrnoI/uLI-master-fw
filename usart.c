@@ -27,7 +27,7 @@ void USARTInit(void)
 	RCSTAbits.SPEN	= 1;  // enable async mode
 	TXSTAbits.TX9	= 1;  // 9-bit sending
 	RCSTAbits.RX9	= 1;  // 9-bit receiving
-	RCSTAbits.ADDEN = 1;  // enable address detection
+	//RCSTAbits.ADDEN = 1;  // enable address detection
 						  // TX interrupt must be in high level (otherwise will not match 80 us window)
 	RCSTAbits.CREN	= 1;  // enable RX
 	TXSTAbits.TXEN	= 1;  // enable TX

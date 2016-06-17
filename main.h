@@ -13,6 +13,8 @@
 typedef struct {
     BYTE index;
     BYTE timeout;
+    BYTE round;
+    BOOL reacted;
 } current;
 
 // one XpressNET device
