@@ -34,19 +34,19 @@ typedef struct {
  * Empty flag must be set when manipulating with ring buffer!
  */
 
-void ringAddByte(ring_generic *buf, BYTE dat);
-BYTE ringRemoveByte(ring_generic *buf);
-void ringRemoveFrame(ring_generic* buf, BYTE num);
-BYTE ringReadByte(ring_generic* buf, BYTE offset);
-BYTE ringLength(ring_generic* buf);
-BOOL ringFull(ring_generic* buf);
-BOOL ringEmpty(ring_generic* buf);
-BYTE ringDistance(ring_generic* buf, BYTE first, BYTE second);
-void ringSerialize(ring_generic* buf, BYTE* out, BYTE start, BYTE length);
-void ringRemoveFromMiddle(ring_generic* buf, BYTE start, BYTE length);
-void ringClear(ring_generic* buf);
-BYTE ringFreeSpace(ring_generic* buf);
-void ringAddToStart(ring_generic* buf, BYTE* data, BYTE len);
+void ringAddByte(volatile ring_generic *buf, BYTE dat);
+BYTE ringRemoveByte(volatile ring_generic *buf);
+void ringRemoveFrame(volatile ring_generic* buf, BYTE num);
+BYTE ringReadByte(volatile ring_generic* buf, BYTE offset);
+BYTE ringLength(volatile ring_generic* buf);
+BOOL ringFull(volatile ring_generic* buf);
+BOOL ringEmpty(volatile ring_generic* buf);
+BYTE ringDistance(volatile ring_generic* buf, BYTE first, BYTE second);
+void ringSerialize(volatile ring_generic* buf, BYTE* out, BYTE start, BYTE length);
+void ringRemoveFromMiddle(volatile ring_generic* buf, BYTE start, BYTE length);
+void ringClear(volatile ring_generic* buf);
+BYTE ringFreeSpace(volatile ring_generic* buf);
+void ringAddToStart(volatile ring_generic* buf, BYTE* data, BYTE len);
     // this function probably misbihaves, 
 
 //#define ringBufferAlloc(name, size) typedef struct { BYTE max; BYTE ptr_b; BYTE ptr_e; BYTE data[size]; } ## T ## name ; T ## name name;
