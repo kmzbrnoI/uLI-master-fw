@@ -50,21 +50,15 @@
     //  required in the stack provided demos.  They are not required in
     //  final application design.
     
-    #define DEMO_BOARD LOW_PIN_COUNT_USB_DEVELOPMENT_KIT
-    #define LOW_PIN_COUNT_USB_DEVELOPMENT_KIT
     #define CLOCK_FREQ 48000000
     #define GetSystemClock() CLOCK_FREQ
     
     /** LED ************************************************************/
-    #define mInitAllLEDs()       /*LATC &= 0xF8;*/ TRISC &= 0xF8;
+    #define mInitAllLEDs();      TRISC &= 0xF8;
     
-    /*#define mLED_In              LATCbits.LATC0
+    #define mLED_In              LATCbits.LATC0
     #define mLED_Out             LATCbits.LATC1
-    #define mLED_Pwr             LATCbits.LATC2*/
-
-    #define mLED_In              PORTCbits.RC0
-    #define mLED_Out             PORTCbits.RC1
-    #define mLED_Pwr             PORTCbits.RC2
+    #define mLED_Pwr             LATCbits.LATC2
 
     #define mLED_In_On();        mLED_In = 1;
     #define mLED_Out_On();       mLED_Out = 1;

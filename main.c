@@ -66,13 +66,12 @@
 
 /** D E F I N E S ************************************************************/
 
-// TODO: check wheter there defined are necessary
-#define USB_header(buf, start)  ((start+1)&buf.max)
-#define USB_msg_len(header)		((ring_USB_datain.data[header] & 0x0F)+3)	  // len WITH header byte, WITH xor byte and WITH call byte
-#define USB_last_message_len	ringDistance(&ring_USB_datain, last_start, ring_USB_datain.ptr_e)
+#define msg_len(buf,start)      (((buf).data[((start)+1) & (buf).max] & 0x0F)+3)
 
-#define USART_msg_len(start)	((ring_USART_datain.data[(start+1) & ring_USART_datain.max] & 0x0F)+3)	// length of xpressnet message is 4-lower bits in second byte
-#define USART_last_message_len	ringDistance(&ring_USART_datain, last_start, ring_USART_datain.ptr_e)
+#define USB_last_message_len	ringDistance((ring_generic*)&ring_USB_datain, last_start, ring_USB_datain.ptr_e)
+#define USART_last_message_len	ringDistance((ring_generic*)&ring_USART_datain, last_start, ring_USART_datain.ptr_e)
+
+// TODO: check wheter there defined are necessary
 //#define USART_msg_to_send		((ringLength(&ring_USB_datain) >= 2) && (ringLength(&ring_USB_datain) >= USB_msg_len(ring_USB_datain.ptr_b)))
  // TODO: fix USB_msg_len
 
@@ -103,7 +102,6 @@ volatile BYTE ten_ms_counter = 0;
     // 10 ms counter
 
 volatile BOOL usb_configured = FALSE;
-
 
 /** P R I V A T E  P R O T O T Y P E S ***************************************/
 static void InitializeSystem(void);
@@ -154,9 +152,9 @@ void InitEEPROM(void);
 		#endif
 
 		// USART send interrupt
-		if ((PIE1bits.TXIE) && (PIR1bits.TXIF)) {
-			USART_send();
-		}
+		/*if ((PIE1bits.TXIE) && (PIR1bits.TXIF)) {
+			//USART_send();
+		}*/
 
 	}	//This return will be a "retfie fast", since this is in a #pragma interrupt section 
 	
@@ -176,7 +174,6 @@ void InitEEPROM(void);
                 ten_ms_counter = 0;
                 
                 // 10 ms overflow:
-                
                 
                 // end of 10 ms counter
             }
@@ -211,48 +208,17 @@ void main(void)
 			}
 		#endif
 
-		#if defined(USB_POLLING)
-		// Check bus status and service USB interrupts.
-		USBDeviceTasks(); // Interrupt or polling method.  If using polling, must call
-						  // this function periodically.  This function will take care
-						  // of processing and responding to SETUP transactions 
-						  // (such as during the enumeration process when you first
-						  // plug in).	USB hosts require that USB devices should accept
-						  // and process SETUP packets in a timely fashion.  Therefore,
-						  // when using polling, this function should be called 
-						  // frequently (such as once about every 100 microseconds) at any
-						  // time that a SETUP packet might reasonably be expected to
-						  // be sent by the host to your device.  In most cases, the
-						  // USBDeviceTasks() function does not take very long to
-						  // execute (~50 instruction cycles) before it returns.
-		#endif
-
-
-		// Application-specific tasks.
-		// Application related code may be added here, or in the ProcessIO() function.
-
-		USART_receive();
 		USB_receive();
 		USB_send();
-
 		CDCTxService();
 	}//end while
 }//end main
 
 void InitializeSystem(void)
 {
-	#if (defined(__18CXX) & !defined(PIC18F87J50_PIM))
-		ADCON1 |= 0x0F;					// Default all pins to digital
-	#endif
-
-	#if defined(USE_USB_BUS_SENSE_IO)
-		tris_usb_bus_sense = INPUT_PIN; // See HardwareProfile.h
-	#endif
-	
-	#if defined(USE_SELF_POWER_SENSE_IO)
-		tris_self_power = INPUT_PIN;	// See HardwareProfile.h
-	#endif
-
+    ADCON1 = 0x0F;   
+    ADCON0 = 0;
+    
 	UserInit();
 	InitEEPROM();
 	USBDeviceInit();
@@ -271,9 +237,9 @@ void UserInit(void)
 	
 	// Initialize all of the LED pins
 	mInitAllLEDs();
-	mLED_In_Off();
-	mLED_Pwr_Off();
-	mLED_Out_Off();
+	mLED_Pwr_On();
+	mLED_In_On();
+	mLED_Out_On();
 	
 	// setup timer2 on 100 us
 	T2CONbits.T2CKPS = 0b11;	// prescaler 16x
@@ -318,8 +284,8 @@ void USBCBSuspend(void)
 
 	usb_configured = FALSE;
 	//mLED_Out_On();
-	ringClear(&ring_USART_datain);
-	ringClear(&ring_USB_datain);
+	ringClear((ring_generic*)&ring_USART_datain);
+	ringClear((ring_generic*)&ring_USB_datain);
 }
 
 void USBCBWakeFromSuspend(void)
@@ -352,7 +318,7 @@ void USBCBInitEP(void)
 {
 	CDCInitEP();
 	usb_configured = TRUE;
-	//mLED_Out_Off();
+    mLED_Out_Off();
 }
 
 void USBCBSendResume(void)
@@ -428,15 +394,17 @@ void USART_receive(void)
 // Check for data in ring_USART_datain and send complete data to USB.
 
 void USB_send(void)
-{	
+{
+    BYTE len = msg_len(ring_USART_datain, ring_USART_datain.ptr_b);
+    
 	// check for USB ready
 	if (!mUSBUSARTIsTxTrfReady()) return;
-
-	if (((ringLength(&ring_USART_datain)) >= 1) && (ringLength(&ring_USART_datain) >= USART_msg_len(ring_USART_datain.ptr_b))) {
+    
+    if (((ringLength((ring_generic*)&ring_USART_datain)) >= 3) && (ringLength((ring_generic*)&ring_USART_datain) >= len)) {
 		// send message
-		ringSerialize(&ring_USART_datain, (BYTE*)USB_Out_Buffer, ring_USART_datain.ptr_b, USART_msg_len(ring_USART_datain.ptr_b));
-		putUSBUSART(USB_Out_Buffer+1, ((USB_Out_Buffer[1])&0x0F)+2);
-		ringRemoveFrame(&ring_USART_datain, ((USB_Out_Buffer[1])&0x0F)+3);
+		ringSerialize((ring_generic*)&ring_USART_datain, (BYTE*)USB_Out_Buffer, ring_USART_datain.ptr_b, len);
+		putUSBUSART(USB_Out_Buffer, len);
+		ringRemoveFrame((ring_generic*)&ring_USART_datain, len);
 	}
 }
 
@@ -456,7 +424,7 @@ void USB_receive(void)
 	if(mUSBUSARTIsTxTrfReady())
 	{
 		// ring_USB_datain overflow check
-		if (ringFull(&ring_USB_datain)) {
+		if (ringFull((ring_generic*)&ring_USB_datain)) {
 			// delete last message
 			ring_USB_datain.ptr_e = last_start;
 			if (ring_USB_datain.ptr_b == ring_USB_datain.ptr_e) ring_USART_datain.empty = TRUE;
@@ -467,7 +435,7 @@ void USB_receive(void)
 			return;
 		}
 		
-		received_len = getsUSBUSART(&ring_USB_datain, ringFreeSpace(&ring_USB_datain));
+		received_len = getsUSBUSART((ring_generic*)&ring_USB_datain, ringFreeSpace((ring_generic*)&ring_USB_datain));
 		if (received_len == 0) {
 			// check for timeout
 			if ((usb_timeout >= USB_MAX_TIMEOUT) && (last_start != ring_USB_datain.ptr_e)) {
@@ -481,35 +449,38 @@ void USB_receive(void)
 			return;
 		}
 		usb_timeout = 0;
-				
+		
 		// data received -> parse data
         // at least 3 bytes must be in buffer to start parsing
         // (call byte + header byte + xor)
-		while ((ringDistance(&ring_USB_datain, last_start, ring_USB_datain.ptr_e) >= 3) &&
-				(USB_last_message_len >= USB_msg_len(USB_header(ring_USB_datain, last_start)))) {
-			
+		while ((ringDistance((ring_generic*)&ring_USB_datain, last_start, ring_USB_datain.ptr_e) >= 3) &&
+				(USB_last_message_len >= msg_len(ring_USB_datain, last_start))) {
+
 			// whole message received -> check for xor
-			for (i = 0, xor = 0; i < USB_msg_len(USB_header(ring_USB_datain, last_start))-2; i++)
+			for (i = 0, xor = 0; i < msg_len(ring_USB_datain, last_start)-2; i++)
 				xor ^= ring_USB_datain.data[(i+last_start+1) & ring_USB_datain.max];
 			
 			if (xor != ring_USB_datain.data[(i+last_start+1) & ring_USB_datain.max]) {
 				// xor error
 				// here, we need to delete content in the middle of ring buffer
-				ringRemoveFromMiddle(&ring_USB_datain, last_start, USB_msg_len(USB_header(ring_USB_datain, last_start)));
+				ringRemoveFromMiddle((ring_generic*)&ring_USB_datain, last_start, msg_len(ring_USB_datain, last_start));
 				//TODO: respondXORerror();
 				return;
 			}
 			
 			// xor ok -> parse data
             if (((ring_USB_datain.data[last_start] >> 5) && 0b11) == 0b01) {
-                parse_command_for_master(last_start, USB_msg_len(USB_header(ring_USB_datain, last_start)));
-                last_start = (last_start+USB_msg_len(USB_header(ring_USB_datain, last_start)))&ring_USB_datain.max;                
+                parse_command_for_master(last_start, msg_len(ring_USB_datain, last_start));
+                
+                // remove message from buffer -> do not move last_start
+                // (message moves in the buffer itself)
+                ringRemoveFromMiddle((ring_generic*)&ring_USB_datain, last_start, msg_len(ring_USB_datain, last_start));                
             } else {
                 // TODO: when usart is not ready, respond "USART not ready" here
                 // and remove data from buffer:
                 //   last_start = (last_start+USB_msg_len(USB_header(ring_USB_datain, last_start)))&ring_USB_datain.max;
                 return;
-            }			
+            }
 		}
 	}
 }
@@ -523,6 +494,7 @@ void USB_receive(void)
 void parse_command_for_master(BYTE start, BYTE len)
 {
     // TODO
+    mLED_Out_Toggle();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
