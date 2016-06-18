@@ -11,9 +11,9 @@
 
 // device currently being adressed by master
 typedef struct {
-    BYTE index;
-    BYTE timeout;
-    BOOL reacted;
+    BYTE index;             // requested device index
+    BYTE timeout;           // after timeout is too big, next device is picked
+    BOOL reacted;           // if the device has reacted to normal inquiry
 } current;
 
 #endif /* MAIN_H */

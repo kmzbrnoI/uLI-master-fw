@@ -85,42 +85,46 @@
 #pragma udata
 char USB_Out_Buffer[32];
 
-// USART and USB buffers
-volatile ring_generic ring_USB_datain;
-volatile ring_generic ring_USART_datain;
+// USB -> USART ring buffer
+volatile ring_generic ring_USB_datain;      
+// USART -> USB ring buffer
+volatile ring_generic ring_USART_datain;                                        
 
-// currently requested device
-volatile current current_dev;
+// XpressnET device currently being requested
+volatile current current_dev;                                               
 
 #pragma idata
 
-volatile BYTE usb_timeout = 0;
-	// increment every 100 us -> 100 ms timeout = 1 000
+// time between 2 bytes received from USB
+// increment every 100 us -> 100 ms timeout = 1 000
+volatile BYTE usb_timeout = 0;  
+
+// time between 2 bytes received from USART
+// increment every 100 us -> 100 ms timeout = 1 000
 volatile WORD usart_timeout = 0;
-	// increment every 100 us -> 100 ms timeout = 1 000
+	
+// 10 ms timer counter
 volatile WORD ten_ms_counter = 0;
-    // 10 ms counter
 
 // callback being called after byte is sent to USART
 void (*volatile sent_callback)(void) = NULL;
 
+// ondex of byte in ring_USB_datain to be sent to USART
 volatile BYTE usart_to_send = 0;
+volatile BOOL usart_last_byte_sent = FALSE;
 
 volatile BOOL usb_configured = FALSE;
-volatile BYTE tmp;
-volatile BOOL usart_last_byte_sent = FALSE;
 
 volatile BYTE mLED_In_Timeout = 2*MLED_IN_MAX_TIMEOUT;
 
 /** P R I V A T E  P R O T O T Y P E S ***************************************/
-static void InitializeSystem(void);
 void YourHighPriorityISRCode();
 void YourLowPriorityISRCode();
 
 // general functions
 void user_init(void);
+void initialize_system(void);
 BYTE calc_xor(BYTE* data, BYTE len);
-void Timer2(void);
 void init_EEPROM(void);
 void init_devices(void);
 BYTE calc_parity(BYTE data);
@@ -192,19 +196,23 @@ void USART_receive(void);
 		// Timer2 on 10 us
 		if ((PIE1bits.TMR2IE) && (PIR1bits.TMR2IF)) {
 			
+            // USART currently requested device timeout
             if ((current_dev.timeout > 0) && (current_dev.timeout < NI_TIMEOUT)) { current_dev.timeout++; }
             
+            // XpressNET direction is turned to "IN" as soon as possible after
+            // last byte was sent to XpressNET.
+            // This is done independently on any callbacks. This needs to be done really fast!
 			if ((usart_last_byte_sent) && (TXSTAbits.TRMT)) {
                 XPRESSNET_DIR  = XPRESSNET_IN;
-                RCSTAbits.CREN = 1;    // enable RX
+                RCSTAbits.CREN = 1;    // enable USART RX
             }
             
+            // Detection of USART device answering normal inquiry.
             if ((!BAUDCONbits.RCIDL) && (!current_dev.reacted) && (RCSTAbits.CREN)) {
                 // receiver detected start bit -> wait for all data
                 current_dev.reacted = TRUE;
-                current_dev.timeout = 0; // device answered -> provide long window                
+                current_dev.timeout = 0; // device answered -> provide long window
                 usart_timeout = 0;
-                mLED_In_On();
             }
 
             // usart receive timeout
@@ -243,7 +251,7 @@ void USART_receive(void);
 
 void main(void)
 {
-	InitializeSystem();
+	initialize_system();
 
 	while(1)
 	{
@@ -254,13 +262,18 @@ void main(void)
 			}
 		#endif
 
+        // Normal inquiery answer timeout.
+        // This function is not placed in interrupt to serve interrupt as
+        // fast as possible.
         if (current_dev.timeout >= NI_TIMEOUT) {
             // device did not answer in 120 us
             current_dev.timeout = 0;
             USART_send_next_frame();
         }
-        // TODO: calling function in interrupt is a problem, is this enough? (latentions)
-            
+        
+        // Transmission to USART ended.
+        // This function is not placed in interrupt to server interrupt as
+        // fast as possible.
 		if ((usart_last_byte_sent) && (TXSTAbits.TRMT)) {
     		usart_last_byte_sent = 0;                
             if (sent_callback) { sent_callback(); }
@@ -273,7 +286,7 @@ void main(void)
 	}//end while
 }//end main
 
-void InitializeSystem(void)
+void initialize_system(void)
 {
     ADCON1 = 0x0F;   
     ADCON0 = 0;
@@ -318,8 +331,8 @@ void user_init(void)
     INTCONbits.RABIE = 0;       // enable port interrupts
     INTCON2bits.RABIP = 1;      // interrupt in high level
                                 // interrupt is fired on port change
-	
-	T2CONbits.TMR2ON = 1;		// enable timer2
+    
+    T2CONbits.TMR2ON = 1;		// enable timer2
 }
 
 // ******************************************************************************************************
@@ -440,19 +453,18 @@ BYTE calc_xor(BYTE* data, BYTE len)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/* How does USART data receiving look like:
- *	1) We wait for start of mesage for us (9. bit is 1 and address is XPRESSNET_ADDR)
- *	2) We receive data into ring_USART_datain (ring buffer), message start in ring buffer is saved to last_start.
- *	3) Once the message is received we check XOR. When the XOR does not match, we delete the message from ring buffer.
- *	4) When USB is ready to send messages, we send messages from ring buffer.
- *	This function specially does not and MUST NOT care about start of the ring buffer.
- *	Start of the ring buffer is moved by function which sends data to usb.
+/* RECEIVING DATA FROM XPRESSNET DEVICES
+ * This function should be periodiccaly called, timinig is not very critical
+ * (as the input FIFO is not full). This function eats data from USART FIFO
+ * and puts it into internal ring buffer. After signle message is received,
+ * some time it let to device to switch directions and next normal inquiery is
+ * transfered.
  */
 
 void USART_receive(void)
 {
     // We do not check xor in this function intentionally.
-    // We let the PC to solve these xor issues.
+    // XOR should be chacked in PC.
     
 	static nine_data received = {0, 0};
 	static BYTE last_start = 0;
@@ -528,7 +540,6 @@ void USB_send(void)
 
 ////////////////////////////////////////////////////////////////////////////////
 /* Receive data from USB and add it to ring_USB_datain.
- * Index of start of last message is in 
  */
 
 void USB_receive(void)
@@ -615,8 +626,6 @@ void USB_receive(void)
 
 ////////////////////////////////////////////////////////////////////////////////
 /* Parse data intended for master.
- * \start and \len reference to ring_USB_datain.
- * \len is WITH header byte, WITH xor byte and WITH call byte
  */ 
 
 void parse_command_for_master(BYTE start, BYTE len)
@@ -626,18 +635,12 @@ void parse_command_for_master(BYTE start, BYTE len)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/* Send data to USART.
- * How it works:
- *	This functino is called when TX is enabled and sends each byte manually.
- *	It always sends message from beginning of the ring_USB_datain buffer.
- *	\to_send is index of byte in ring_USB_datain to be send next time.
- *	Note: if this function has anything to send, it has to send it,
- *	because this function is called only once after TX gets ready.
- *	Returns: true if any data were send, otherwise false
- *	This function should be called only when there is anything to send and bus is in output state (at least 1 byte).
+/* SEND NEXT DATA TO XPRESSNET DEVICE.
+ * This function checks if message is present in USB->USART buffer. If yes,
+ * the mesasge is sent to device. Otherwise, next device is requested with
+ * normal inquiry.
  */ 
-// XpressNET is free and able to send next data (input data or normal inquiry
-// to next device)
+
 void USART_send_next_frame(void)
 {
     BYTE ring_length = ringDistance(ring_USB_datain, ring_USB_datain.ptr_b, ring_USB_datain.ptr_e);
@@ -658,6 +661,11 @@ void USART_send_next_frame(void)
     }
 }
 
+/* SEND REST OF MESSAGE TO USART.
+ * This fnction is called as callback (from interrupt!) after a byte is
+ * sent to USART. It sends next byte. After last byte is sent, 
+ * USART_request_next_device is called as callback.
+ */
 void USART_send_rest_of_message(void)
 {    
 	USARTWriteByte(0, ring_USB_datain.data[usart_to_send]);
@@ -690,6 +698,7 @@ void USART_request_next_device(void)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+
 // Debug function: dump buffer to USB
 void dump_buf_to_USB(ring_generic* buf)
 {
@@ -726,8 +735,6 @@ void USART_request_current_device(void)
     PIE1bits.TXIE = 0;
     USARTWriteByte(1, calc_parity(current_dev.index + (0b10 << 5)));
     usart_last_byte_sent = TRUE;
-    
-    if (current_dev.index == 1) { mLED_Out_Toggle(); }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -774,6 +781,7 @@ void USART_pick_next_device(void)
 
 ////////////////////////////////////////////////////////////////////////////////
 
+// Send 3 bytes to USB.
 BOOL USB_send_data(BYTE first, BYTE second, BYTE third)
 {    
     USB_Out_Buffer[0] = first;
