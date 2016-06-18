@@ -15,7 +15,7 @@ void ringAddByte(ring_generic *buf, BYTE data)
 BYTE ringRemoveByte(ring_generic* buf)
 {
     BYTE result;
-    if (ringLength(buf) == 0) return 0;
+    if (ringLength(*buf) == 0) return 0;
     result = buf->data[buf->ptr_b];
     buf->ptr_b = (buf->ptr_b + 1) & buf->max;
     if (buf->ptr_b == buf->ptr_e) buf->empty = TRUE;
@@ -25,7 +25,7 @@ BYTE ringRemoveByte(ring_generic* buf)
 void ringRemoveFrame(ring_generic* buf, BYTE num)
 {
     BYTE x;
-    x = ringLength(buf);
+    x = ringLength(*buf);
     if (x > num) x = num;
     buf->ptr_b = (buf->ptr_b + x) & buf->max;
     if (buf->ptr_b == buf->ptr_e) buf->empty = TRUE;
@@ -36,31 +36,6 @@ BYTE ringReadByte(ring_generic* buf, BYTE offset)
     BYTE pos;
     pos = (buf->ptr_b + offset) & buf->max;
     return buf->data[pos];
-}
-
-BYTE ringLength(ring_generic* buf)
-{
-    return ((buf->ptr_e - buf->ptr_b) & buf->max) + (!!ringFull(buf) * (buf->max+1));
-}
-
-BOOL ringFull(ring_generic* buf)
-{
-    return (buf->ptr_b == buf->ptr_e) && (!buf->empty);
-}
-
-BOOL ringEmpty(ring_generic* buf)
-{
-    return (buf->ptr_b == buf->ptr_e) && (buf->empty);
-}
-
-BYTE ringFreeSpace(ring_generic* buf)
-{
-    return (buf->max+1) - ringLength(buf);
-}
-
-BYTE ringDistance(ring_generic* buf, BYTE first, BYTE second)
-{
-    return ((second-first) & buf->max);
 }
 
 void ringSerialize(ring_generic* buf, BYTE* out, BYTE start, BYTE length)
@@ -84,7 +59,7 @@ void ringAddToStart(ring_generic* buf, BYTE* data, BYTE len)
     int i;
     
     // check full buffer    
-    if (ringLength(buf) < len) return;
+    if (ringLength(*buf) < len) return;
         
     buf->ptr_b = (buf->ptr_b-len)&buf->max;
     for (i = 0; i < len; i++) { buf->data[(buf->ptr_b+i)&buf->max] = data[i]; }

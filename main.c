@@ -68,8 +68,8 @@
 
 #define msg_len(buf,start)      (((buf).data[((start)+1) & (buf).max] & 0x0F)+3)
 
-#define USB_last_message_len	ringDistance((ring_generic*)&ring_USB_datain, last_start, ring_USB_datain.ptr_e)
-#define USART_last_message_len	ringDistance((ring_generic*)&ring_USART_datain, last_start, ring_USART_datain.ptr_e)
+#define USB_last_message_len	ringDistance(ring_USB_datain, last_start, ring_USB_datain.ptr_e)
+#define USART_last_message_len	ringDistance(ring_USART_datain, last_start, ring_USART_datain.ptr_e)
 
 #define USB_MAX_TIMEOUT                   10		// 100 ms
 #define USART_MAX_TIMEOUT                 50		// 500 us
@@ -478,7 +478,7 @@ void USART_receive(void)
 		
 	received = USARTReadByte();
 	
-    if (ringFreeSpace((ring_generic*)&ring_USART_datain) < 2) {
+    if (ringFreeSpace(ring_USART_datain) < 2) {
 		// reset buffer and wait for next message
 		ring_USART_datain.ptr_e = last_start;
 		if (ring_USART_datain.ptr_e == ring_USART_datain.ptr_b) ring_USART_datain.empty = TRUE;
@@ -510,7 +510,7 @@ void USB_send(void)
 	// check for USB ready
 	if (!mUSBUSARTIsTxTrfReady()) return;
     
-    if (((ringLength((ring_generic*)&ring_USART_datain)) >= 3) && (ringLength((ring_generic*)&ring_USART_datain) >= len)) {
+    if (((ringLength(ring_USART_datain)) >= 3) && (ringLength(ring_USART_datain) >= len)) {
 		// send message
 		ringSerialize((ring_generic*)&ring_USART_datain, (BYTE*)USB_Out_Buffer, ring_USART_datain.ptr_b, len);
 		putUSBUSART(USB_Out_Buffer, len);
@@ -535,7 +535,7 @@ void USB_receive(void)
 	if(mUSBUSARTIsTxTrfReady())
 	{
 		// ring_USB_datain overflow check
-		if (ringFull((ring_generic*)&ring_USB_datain)) {
+		if (ringFull(ring_USB_datain)) {
 			// delete last message
 			ring_USB_datain.ptr_e = last_start;
 			if (ring_USB_datain.ptr_b == ring_USB_datain.ptr_e) ring_USART_datain.empty = TRUE;
@@ -546,7 +546,7 @@ void USB_receive(void)
 			return;
 		}
 		
-		received_len = getsUSBUSART((ring_generic*)&ring_USB_datain, ringFreeSpace((ring_generic*)&ring_USB_datain));
+		received_len = getsUSBUSART((ring_generic*)&ring_USB_datain, ringFreeSpace(ring_USB_datain));
 		if (received_len == 0) {
 			// check for timeout
 			if ((usb_timeout >= USB_MAX_TIMEOUT) && (last_start != ring_USB_datain.ptr_e)) {
@@ -566,7 +566,7 @@ void USB_receive(void)
 		// data received -> parse data
         // at least 3 bytes must be in buffer to start parsing
         // (call byte + header byte + xor)
-		while ((ringDistance((ring_generic*)&ring_USB_datain, last_start, ring_USB_datain.ptr_e) >= 3) &&
+		while ((ringDistance(ring_USB_datain, last_start, ring_USB_datain.ptr_e) >= 3) &&
 				(USB_last_message_len >= msg_len(ring_USB_datain, last_start))) {
             // while message received
             
@@ -634,7 +634,7 @@ void parse_command_for_master(BYTE start, BYTE len)
 // to next device)
 void USART_send_next_frame(void)
 {
-    BYTE ring_length = ringDistance((ring_generic*)&ring_USB_datain, ring_USB_datain.ptr_b, ring_USB_datain.ptr_e);
+    BYTE ring_length = ringDistance(ring_USB_datain, ring_USB_datain.ptr_b, ring_USB_datain.ptr_e);
     RCSTAbits.CREN	= 0;    // disable RX
     
 	// check if there is a message from PC to be sent to XpressNET

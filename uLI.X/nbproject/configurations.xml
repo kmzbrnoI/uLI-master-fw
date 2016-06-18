@@ -174,12 +174,6 @@
         <property key="programoptions.uselvpprogramming" value="false"/>
         <property key="voltagevalue" value="3.25"/>
       </ICD3PlatformTool>
-      <MPASMWIN-LD>
-        <property key="cod-file" value="false"/>
-        <property key="extra-lib-directories" value=""/>
-        <property key="hex-output-format" value="INHX32"/>
-        <property key="map-file" value="${DISTDIR}/${PROJECTNAME}.${IMAGE_TYPE}.map"/>
-      </MPASMWIN-LD>
       <PK3OBPlatformTool>
         <property key="AutoSelectMemRanges" value="auto"/>
         <property key="SecureSegment.SegmentProgramming" value="FullChipProgramming"/>
@@ -458,13 +452,6 @@
                   value=""/>
         <property key="warningmessagebreakoptions.warningmessages" value="holdstate"/>
       </Simulator>
-      <mpasmsuite>
-        <property key="absolute-mode" value="false"/>
-        <property key="eeprom-width" value="8"/>
-        <property key="extended-mode" value="false"/>
-        <property key="extended-mode-mpasm" value="false"/>
-        <property key="extended-mode-mplink" value="false"/>
-      </mpasmsuite>
     </conf>
   </confs>
 </configurationDescriptor>
