@@ -77,8 +77,6 @@
 #define DEVICE_COUNT                      32
 #define NI_TIMEOUT                        12        // normal inquiery timeout = 120 us
 
-#define NI_ROUND_COUNT                     5
-
 #define MLED_IN_MAX_TIMEOUT                5		// 50 ms
 
 /** V A R I A B L E S ********************************************************/
@@ -136,6 +134,8 @@ void dump_buf_to_USB(ring_generic* buf);
 void USBDeviceTasks(void);
 void parse_command_for_master(BYTE start, BYTE len);
 BOOL USB_send_data(BYTE first, BYTE second, BYTE third);
+void USB_send_transistor_status(void);
+void USB_send_sense_status(void);
 
 // USART (XpressNET) functions
 void USART_send_next_frame(void);
@@ -314,6 +314,10 @@ void user_init(void)
 	mLED_In_On();
 	mLED_Out_On();
 	
+    mInitPwrControl;
+    mInitSense;
+    mPwrControlOff;
+    
 	// setup timer2 on 100 us
 	T2CONbits.T2CKPS = 0b01;	// prescaler 4x
 	PR2 = 30;					// setup timer period register to interrupt every 10 us
@@ -631,7 +635,23 @@ void USB_receive(void)
 void parse_command_for_master(BYTE start, BYTE len)
 {
     // TODO
-    
+    if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0xA0) {
+        // close transistor
+        mPwrControlOff;
+        USB_send_transistor_status();
+    } else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0xA1) {
+        // open transistor
+        mPwrControlOn;
+        USB_send_transistor_status();
+    } else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0xA2) {
+        // tansistor status request
+        USB_send_transistor_status();
+    } else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0xB2) {
+        // sense status request
+        USB_send_sense_status();
+    } else {    
+        //USB_send_sense_status();
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -793,6 +813,26 @@ BOOL USB_send_data(BYTE first, BYTE second, BYTE third)
     } else {
         return FALSE;
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void USB_send_transistor_status(void)
+{
+    USB_Out_Buffer[0] = 0xA0;
+    USB_Out_Buffer[1] = 0x11;
+    USB_Out_Buffer[2] = 0xA0 + mPwrControl;
+    USB_Out_Buffer[3] = USB_Out_Buffer[1] ^ USB_Out_Buffer[2];
+    if (mUSBUSARTIsTxTrfReady()) { putUSBUSART(USB_Out_Buffer, 4); }
+}
+
+void USB_send_sense_status(void)
+{
+    USB_Out_Buffer[0] = 0xA0;
+    USB_Out_Buffer[1] = 0x11;
+    USB_Out_Buffer[2] = 0xB0 + mSense;
+    USB_Out_Buffer[3] = USB_Out_Buffer[1] ^ USB_Out_Buffer[2];
+    if (mUSBUSARTIsTxTrfReady()) { putUSBUSART(USB_Out_Buffer, 4); }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
