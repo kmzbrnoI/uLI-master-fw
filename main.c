@@ -79,6 +79,8 @@
 
 #define NI_ROUND_COUNT                     5
 
+#define MLED_IN_MAX_TIMEOUT                5		// 50 ms
+
 /** V A R I A B L E S ********************************************************/
 #pragma udata
 char USB_Out_Buffer[32];
@@ -107,6 +109,8 @@ volatile BYTE usart_to_send = 0;
 volatile BOOL usb_configured = FALSE;
 volatile BYTE tmp;
 volatile BOOL usart_last_byte_sent = FALSE;
+
+volatile BYTE mLED_In_Timeout = 2*MLED_IN_MAX_TIMEOUT;
 
 /** P R I V A T E  P R O T O T Y P E S ***************************************/
 static void InitializeSystem(void);
@@ -195,16 +199,12 @@ void USART_receive(void);
                 RCSTAbits.CREN = 1;    // enable RX
             }
             
-            if (!BAUDCONbits.RCIDL) {
-                mLED_Out_Toggle();
-            }
-            
             if ((!BAUDCONbits.RCIDL) && (!current_dev.reacted) && (RCSTAbits.CREN)) {
                 // receiver detected start bit -> wait for all data
-                current_dev.timeout = 0; // device answered -> provide long window
                 current_dev.reacted = TRUE;
+                current_dev.timeout = 0; // device answered -> provide long window                
                 usart_timeout = 0;
-                
+                mLED_In_On();
             }
 
             // usart receive timeout
@@ -219,6 +219,14 @@ void USART_receive(void);
                 // usb receive timeout
                 if (usb_timeout < USB_MAX_TIMEOUT) usb_timeout++;
 	
+    			// mLEDIn timeout
+    			if (mLED_In_Timeout < 2*MLED_IN_MAX_TIMEOUT) {
+    				mLED_In_Timeout++;
+    				if (mLED_In_Timeout == MLED_IN_MAX_TIMEOUT) {
+    					mLED_In_On();
+    				}
+    			}
+                
                 // end of 10 ms counter
             }
             
@@ -249,7 +257,6 @@ void main(void)
         if (current_dev.timeout >= NI_TIMEOUT) {
             // device did not answer in 120 us
             current_dev.timeout = 0;
-            IOCBbits.IOCB5 = 0;     // disable pin interrupts
             USART_send_next_frame();
         }
         // TODO: calling function in interrupt is a problem, is this enough? (latentions)
@@ -340,7 +347,7 @@ void USBCBSuspend(void)
 	#endif
 
 	usb_configured = FALSE;
-	//mLED_Out_On();
+	mLED_Out_On();
 	ringClear((ring_generic*)&ring_USART_datain);
 	ringClear((ring_generic*)&ring_USB_datain);
 }
@@ -348,7 +355,7 @@ void USBCBSuspend(void)
 void USBCBWakeFromSuspend(void)
 {
 	usb_configured = TRUE;
-	//mLED_Out_Off();
+	mLED_Out_Off();
 }
 
 void USBCB_SOF_Handler(void)
@@ -450,10 +457,6 @@ void USART_receive(void)
 	static nine_data received = {0, 0};
 	static BYTE last_start = 0;
 	
-    /*if (last_start != ring_USART_datain.ptr_e) {
-        mLED_Out_Toggle();
-    }*/
-    
 	// check for (short) timeout
 	if (((last_start != ring_USART_datain.ptr_e) || (current_dev.reacted)) && 
             (usart_timeout >= USART_MAX_TIMEOUT)) {
@@ -498,6 +501,11 @@ void USART_receive(void)
         current_dev.timeout = NI_TIMEOUT / 2;
 	}
 	
+    // toggle LED
+    if (mLED_In_Timeout >= 2*MLED_IN_MAX_TIMEOUT) {
+        mLED_In_Off();
+        mLED_In_Timeout = 0;
+    }    
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -591,8 +599,6 @@ void USB_receive(void)
 				return;
 			}
 			
-            mLED_In_Toggle();
-            
 			// xor ok -> parse data
             if (((ring_USB_datain.data[last_start] >> 5) & 0b11) == 0b01) {
                 parse_command_for_master(last_start, msg_len(ring_USB_datain, last_start));
@@ -616,7 +622,7 @@ void USB_receive(void)
 void parse_command_for_master(BYTE start, BYTE len)
 {
     // TODO
-    //mLED_Out_Toggle();
+    
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -640,14 +646,14 @@ void USART_send_next_frame(void)
 	// check if there is a message from PC to be sent to XpressNET
 	if ((ring_length >= 3) && (ring_length >= msg_len(ring_USB_datain, ring_USB_datain.ptr_b))) {
         // yes -> send the message
-        usart_to_send = (ring_USB_datain.ptr_b + 1) & ring_USB_datain.max;
+        usart_to_send = (ring_USB_datain.ptr_b + 1) & ring_USB_datain.max;        
         XPRESSNET_DIR = XPRESSNET_OUT;
         sent_callback = &(USART_send_rest_of_message);
         usart_last_byte_sent = 0;
         USARTWriteByte(1, ring_USB_datain.data[ring_USB_datain.ptr_b]);
         PIE1bits.TXIE = 1;
     } else {
-        // no -> send normal inquiry to next XpressNET device
+        // no -> send normal inquiry to next XpressNET device        
         USART_request_next_device();
     }
 }
@@ -720,7 +726,8 @@ void USART_request_current_device(void)
     PIE1bits.TXIE = 0;
     USARTWriteByte(1, calc_parity(current_dev.index + (0b10 << 5)));
     usart_last_byte_sent = TRUE;
-    //mLED_Out_Off();
+    
+    if (current_dev.index == 1) { mLED_Out_Toggle(); }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -741,12 +748,16 @@ BYTE calc_parity(BYTE data)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-// This callback is called after normal inquiry is sent.
+/* This callback is called after normal inquiry is sent.
+ * WARNING: this function is called in high-priority interrupt
+ * It could aanyhow interleave low-priority interrupt (especially the part
+ * working with current_dev.timeout = 0) !!
+ */ 
 void USART_ni_sent(void)
 {    
     XPRESSNET_DIR = XPRESSNET_IN;
-    current_dev.timeout = 1;
-    tmp = PORTB;
+    current_dev.timeout = 1;  // yes, this could really happen (interrupt queue is unfathomable)
+    if (current_dev.reacted) { current_dev.timeout = 0; } // yes, this too and has its meaning
     sent_callback = NULL;
 }
 
