@@ -649,8 +649,22 @@ void parse_command_for_master(BYTE start, BYTE len)
     } else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0xB2) {
         // sense status request
         USB_send_sense_status();
-    } else {    
-        //USB_send_sense_status();
+    } else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0x80) {
+        // version request
+        USB_Out_Buffer[0] = 0xA0;
+        USB_Out_Buffer[1] = 0x13;
+        USB_Out_Buffer[2] = 0x80;
+        USB_Out_Buffer[3] = VERSION_HW;
+        USB_Out_Buffer[4] = VERSION_SW;
+        USB_Out_Buffer[5] = USB_Out_Buffer[1] ^ USB_Out_Buffer[2] ^ USB_Out_Buffer[3] ^ USB_Out_Buffer[4];
+        if (mUSBUSARTIsTxTrfReady()) { putUSBUSART(USB_Out_Buffer, 6); }
+    } else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0x81) {
+        // response request
+        USB_Out_Buffer[0] = 0xA0;
+        USB_Out_Buffer[1] = 0x01;
+        USB_Out_Buffer[2] = 0x04;
+        USB_Out_Buffer[3] = 0x05;
+        if (mUSBUSARTIsTxTrfReady()) { putUSBUSART(USB_Out_Buffer, 4); }
     }
 }
 
