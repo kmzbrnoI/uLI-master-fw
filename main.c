@@ -205,7 +205,10 @@ void USART_receive(void);
                 current_dev.reacted = TRUE;
                 usart_timeout = 0;
             }
-            
+
+            // usart receive timeout
+            if (usart_timeout < USART_MAX_TIMEOUT) usart_timeout++;
+
             if (ten_ms_counter < 1000) { ten_ms_counter++; }
             else {
                 ten_ms_counter = 0;
@@ -215,9 +218,6 @@ void USART_receive(void);
                 // usb receive timeout
                 if (usb_timeout < USB_MAX_TIMEOUT) usb_timeout++;
 	
-                // usart receive timeout
-                if (usart_timeout < USART_MAX_TIMEOUT) usart_timeout++;
-                
                 // end of 10 ms counter
             }
             
@@ -503,7 +503,7 @@ void USART_receive(void)
 		// whole message received -> wait a few microseconds and send next data
         last_start = ring_USART_datain.ptr_e;
         current_dev.timeout = NI_TIMEOUT / 2;
-        mLED_Out_On();
+        //mLED_Out_On();
 	}
 	
 }
@@ -723,7 +723,7 @@ void USART_request_current_device(void)
     PIE1bits.TXIE = 0;
     USARTWriteByte(1, calc_parity(current_dev.index + (0b10 << 5)));
     usart_last_byte_sent = TRUE;
-    mLED_Out_Off();
+    //mLED_Out_Off();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -767,6 +767,10 @@ void USART_pick_next_device(void)
     if (current_dev.index >= DEVICE_COUNT) {
         current_dev.index = 1;      // 0 == broadcast (not a device)
         current_dev.round = (current_dev.round + 1) % NI_ROUND_COUNT;
+    }
+    
+    if (current_dev.index == 5) {
+        mLED_Out_Toggle();
     }
     
     // how many devices are active? -> recalculate to be sure
