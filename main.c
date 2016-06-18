@@ -91,8 +91,7 @@ char USB_Out_Buffer[32];
 volatile ring_generic ring_USB_datain;
 volatile ring_generic ring_USART_datain;
 
-// attached devices
-volatile device devices[32];
+// currently requested device
 volatile current current_dev;
 
 #pragma idata
@@ -103,8 +102,6 @@ volatile WORD usart_timeout = 0;
 	// increment every 100 us -> 100 ms timeout = 1 000
 volatile WORD ten_ms_counter = 0;
     // 10 ms counter
-
-volatile BYTE active_dev_count = 0;
 
 // callback being called after byte is sent to USART
 void (*volatile sent_callback)(void) = NULL;
@@ -201,7 +198,6 @@ void USART_receive(void);
             if ((!BAUDCONbits.RCIDL) && (!current_dev.reacted)) {
                 // receiver detected start bit -> wait for all data
                 current_dev.timeout = 0; // device answered -> provide long window
-                devices[current_dev.index].active = TRUE;
                 current_dev.reacted = TRUE;
                 usart_timeout = 0;
             }
@@ -699,16 +695,9 @@ void init_EEPROM(void)
 
 void init_devices(void)
 {
-    int i;
-    
     current_dev.index = 0;
     current_dev.timeout = 1;    // this will cause the processor to send first normal inquiry after some time
-    current_dev.round = 0;
     current_dev.reacted = FALSE;
-    
-    for (i = 0; i < DEVICE_COUNT; i++) {
-        devices[i].active = FALSE;
-    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -758,34 +747,10 @@ void USART_ni_sent(void)
 // pick next device
 void USART_pick_next_device(void)
 {
-    int i;
-    
-    // TODO: this function should be redone to take a significantly less time
-    // while loop with (maximmum) 32 iterations is not possible !
-    
     current_dev.index++;
     if (current_dev.index >= DEVICE_COUNT) {
         current_dev.index = 1;      // 0 == broadcast (not a device)
-        current_dev.round = (current_dev.round + 1) % NI_ROUND_COUNT;
     }
-    
-    if (current_dev.index == 5) {
-        mLED_Out_Toggle();
-    }
-    
-    // how many devices are active? -> recalculate to be sure
-    // we cannot recalculate it hare, it takes a lot of time:
-    /*active_dev_count = 0;
-    for (i = 0; i < DEVICE_COUNT; i++) {
-        if (devices[i].active) { active_dev_count++; }
-    }*/
-    
-    if ((current_dev.round != 0) && (active_dev_count > 0)) {        
-        // find next active device
-        while (!devices[current_dev.index].active) {
-            current_dev.index = (current_dev.index + 1) % DEVICE_COUNT;
-        }
-    }    
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -13,14 +13,8 @@
 typedef struct {
     BYTE index;
     BYTE timeout;
-    BYTE round;
     BOOL reacted;
 } current;
-
-// one XpressNET device
-typedef struct {
-    BOOL active;
-}device ;
 
 #endif /* MAIN_H */
 
