@@ -272,16 +272,14 @@ ROM struct{BYTE bLength;BYTE bDscType;WORD string[1];}sd000={
 sizeof(sd000),USB_DESCRIPTOR_STRING,{0x0409}};
 
 //Manufacturer string descriptor
-ROM struct{BYTE bLength;BYTE bDscType;WORD string[25];}sd001={
+ROM struct{BYTE bLength;BYTE bDscType;WORD string[10];}sd001={
 sizeof(sd001),USB_DESCRIPTOR_STRING,
-{'M','i','c','r','o','c','h','i','p',' ',
-'T','e','c','h','n','o','l','o','g','y',' ','I','n','c','.'
-}};
+{'K','M','Z',' ','B','r','n','o',' ','I'}};
 
 //Product string descriptor
-ROM struct{BYTE bLength;BYTE bDscType;WORD string[3];}sd002={
+ROM struct{BYTE bLength;BYTE bDscType;WORD string[12];}sd002={
 sizeof(sd002),USB_DESCRIPTOR_STRING,
-{'u','L','I'}
+{'u','L','I',' ','-',' ','m','a','s','t','e','r'}
 };
 
 //Array of configuration descriptors
