@@ -78,6 +78,11 @@
 #define NI_TIMEOUT                        12        // normal inquiery timeout = 120 us
 
 #define MLED_IN_MAX_TIMEOUT                5		// 50 ms
+#define MLED_OUT_MAX_TIMEOUT               5		// 50 ms
+
+#define PWR_LED_SHORT_COUNT               15		// 150 ms
+#define PWR_LED_LONG_COUNT                40		// 400 ms
+#define PWR_LED_FERR_COUNT                10		// status led indicates >10 framing errors
 
 /** V A R I A B L E S ********************************************************/
 #pragma udata
@@ -114,6 +119,14 @@ volatile BOOL usart_last_byte_sent = FALSE;
 volatile BOOL usb_configured = FALSE;
 
 volatile BYTE mLED_In_Timeout = 2*MLED_IN_MAX_TIMEOUT;
+volatile BYTE mLED_Out_Timeout = 2*MLED_OUT_MAX_TIMEOUT;
+
+// Power led blinks pwr_led_status times, then stays blank for some time
+//	and then repeats the whole cycle. This lets user to see software status.
+volatile BYTE pwr_led_base_timeout = PWR_LED_SHORT_COUNT;
+volatile BYTE pwr_led_base_counter = 0;
+volatile BYTE pwr_led_status_counter = 0;
+volatile BYTE pwr_led_status = 2;
 
 /** P R I V A T E  P R O T O T Y P E S ***************************************/
 void YourHighPriorityISRCode();
@@ -234,6 +247,34 @@ void USART_receive(void);
     					mLED_In_On();
     				}
     			}
+
+                // mLEDOut timeout
+    			if ((mLED_Out_Timeout < 2*MLED_OUT_MAX_TIMEOUT) && (usb_configured)) {
+    				mLED_Out_Timeout++;
+    				if (mLED_Out_Timeout == MLED_OUT_MAX_TIMEOUT) {
+    					mLED_Out_Off();
+    				}
+    			}
+
+    			// pwrLED toggling
+    			pwr_led_base_counter++;
+    			if (pwr_led_base_counter >= pwr_led_base_timeout) {
+    				pwr_led_base_counter = 0;
+    				pwr_led_status_counter++;
+				
+                    if (pwr_led_status_counter == 2*pwr_led_status) {
+    					// wait between cycles
+    					pwr_led_base_timeout = PWR_LED_LONG_COUNT;
+                        mLED_Pwr_Off();
+    				} else if (pwr_led_status_counter > 2*pwr_led_status) {
+    					// new base cycle
+    					pwr_led_base_timeout = PWR_LED_SHORT_COUNT;
+    					pwr_led_status_counter = 0;
+    					mLED_Pwr_On();
+    				} else {
+    					mLED_Pwr_Toggle();
+    				}
+                }
                 
                 // end of 10 ms counter
             }
@@ -521,7 +562,7 @@ void USART_receive(void)
     if (mLED_In_Timeout >= 2*MLED_IN_MAX_TIMEOUT) {
         mLED_In_Off();
         mLED_In_Timeout = 0;
-    }    
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -625,6 +666,13 @@ void USB_receive(void)
                 last_start = (last_start+msg_len(ring_USB_datain, last_start))&ring_USB_datain.max;
             }
 		}
+        
+        // toggle LED
+        if (mLED_Out_Timeout >= 2*MLED_OUT_MAX_TIMEOUT) {
+            mLED_Out_On();
+            mLED_Out_Timeout = 0;
+        }    
+        
 	}
 }
 
