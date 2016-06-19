@@ -313,7 +313,7 @@ void main(void)
         }
         
         // Transmission to USART ended.
-        // This function is not placed in interrupt to server interrupt as
+        // This function is not placed in interrupt to serve interrupt as
         // fast as possible.
 		if ((usart_last_byte_sent) && (TXSTAbits.TRMT)) {
     		usart_last_byte_sent = 0;                
@@ -671,7 +671,7 @@ void USB_receive(void)
         if (mLED_Out_Timeout >= 2*MLED_OUT_MAX_TIMEOUT) {
             mLED_Out_On();
             mLED_Out_Timeout = 0;
-        }    
+        }
         
 	}
 }
@@ -815,6 +815,7 @@ void USART_request_current_device(void)
     XPRESSNET_DIR = XPRESSNET_OUT;
     sent_callback = &(USART_ni_sent);
     PIE1bits.TXIE = 0;
+    usart_timeout = 0;
     USARTWriteByte(1, calc_parity(current_dev.index + (0b10 << 5)));
     usart_last_byte_sent = TRUE;
 }
