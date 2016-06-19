@@ -1,4 +1,4 @@
-# uLI-master ↔ PC communications protocol
+# uLI-master ↔ PC communication protocol
 
 ## Overview
 
@@ -14,7 +14,7 @@ Standard Master ↔ PC message consists of:
 
 |   Call byte   |  Header byte  |  Data byte 1  |  Data byte 2  | ... |  Data byte n  | XOR |
 |---------------|---------------|---------------|---------------|-----|---------------|-----|
-| `0bPDDA AAAA` | `0bTTTT LLLL` | `0bDDDD DDDD` | `0bDDDD DDDD` | ... | `0bDDDD DDDD` | xor |
+| `0bPDDA AAAA` | `0bTTTT LLLL` | `0bDDDD DDDD` | `0bDDDD DDDD` | ... | `0bDDDD DDDD` | XOR |
 
 ## Call byte:
 
@@ -24,7 +24,6 @@ Standard Master ↔ PC message consists of:
    * `0b01` : command for Master
  - `AAAAA`: address of XpressNET device. When `DD` = `0b01`, `AAAAA` can be
    anything.
-
    `AAAAA` = `0b00000` = broadcast to all XpressNET devices.
 
 ## Header byte
@@ -60,7 +59,7 @@ is XOR of *Header byte, Data byte 1 .. Data byte n*.
 |-----------|-------------|-------------|--------|--------|--------|------------------------------------------|
 | 0xA0      | 0x01        | 0x05        | XOR    | -      | -      | Keep-alive                               |
 | 0xA0      | 0x11        | 0xA 0b000T  | XOR    | -      | -      | Set transistor to T                      |
-| 0xA0      | 0x11        | 0xA 0b0010  | XOR    | -      | -      | Transistor status request                |
-| 0xA0      | 0x11        | 0xB 0b0010  | XOR    | -      | -      | Sense status request                     |
+| 0xA0      | 0x11        | 0xA2        | XOR    | -      | -      | Transistor status request                |
+| 0xA0      | 0x11        | 0xB2        | XOR    | -      | -      | Sense status request                     |
 | 0xA0      | 0x11        | 0x80        | XOR    | -      | -      | Master`s version request                 |
 | 0xA0      | 0x11        | 0x81        | XOR    | -      | -      | Response request                         |
