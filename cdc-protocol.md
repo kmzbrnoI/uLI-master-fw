@@ -59,7 +59,6 @@ is XOR of *Header byte, Data byte 1 .. Data byte n*.
 |-----------|-------------|-------------|--------|--------|--------|------------------------------------------|
 | 0xA0      | 0x01        | 0x05        | XOR    | -      | -      | Keep-alive                               |
 | 0xA0      | 0x11        | 0xA 0b000T  | XOR    | -      | -      | Set transistor to T                      |
-| 0xA0      | 0x11        | 0xA2        | XOR    | -      | -      | Transistor status request                |
-| 0xA0      | 0x11        | 0xB2        | XOR    | -      | -      | Sense status request                     |
+| 0xA0      | 0x11        | 0xA2        | XOR    | -      | -      | Master`s status request                  |
 | 0xA0      | 0x11        | 0x80        | XOR    | -      | -      | Master`s version request                 |
 | 0xA0      | 0x11        | 0x81        | XOR    | -      | -      | Response request                         |
