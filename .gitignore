@@ -32,4 +32,9 @@
 
 *.err
 *.d
+
 private.xml
+uLI-master.X/nbproject/*.mk
+uLI-master.X/nbproject/*.properties
+uLI-master.X/nbproject/*.bash
+uLI-master.X/nbproject/private
