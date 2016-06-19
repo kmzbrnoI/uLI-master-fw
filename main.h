@@ -19,5 +19,16 @@ typedef struct {
     BOOL reacted;           // if the device has reacted to normal inquiry
 } current;
 
+#define PORT_TIMEOUT    10   // 100 ms to consider port changed (yes, really, its power)
+
+typedef struct {
+    BYTE timeout;
+    BOOL state;
+} port_history;
+
+typedef struct {
+    BOOL status;
+} master_waiting;
+
 #endif /* MAIN_H */
 

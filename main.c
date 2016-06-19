@@ -128,6 +128,9 @@ volatile BYTE pwr_led_base_counter = 0;
 volatile BYTE pwr_led_status_counter = 0;
 volatile BYTE pwr_led_status = 2;
 
+volatile port_history sense_hist = {0, 0};
+volatile master_waiting master_send_waiting = {0};
+
 /** P R I V A T E  P R O T O T Y P E S ***************************************/
 void YourHighPriorityISRCode();
 void YourLowPriorityISRCode();
@@ -139,6 +142,7 @@ BYTE calc_xor(BYTE* data, BYTE len);
 void init_EEPROM(void);
 void init_devices(void);
 BYTE calc_parity(BYTE data);
+BYTE check_device_data_to_USB(void);
 
 // USB functions
 void USB_send(void);
@@ -147,7 +151,7 @@ void dump_buf_to_USB(ring_generic* buf);
 void USBDeviceTasks(void);
 void parse_command_for_master(BYTE start, BYTE len);
 BOOL USB_send_master_data(BYTE first, BYTE second, BYTE third);
-void USB_send_status(void);
+void USB_buffer_status(void);
 
 // USART (XpressNET) functions
 void USART_send_next_frame(void);
@@ -273,6 +277,20 @@ void USART_receive(void);
     				} else {
     					mLED_Pwr_Toggle();
     				}
+                }
+                
+                // sense history
+                if (sense_hist.state != mSense) {
+                    if (sense_hist.timeout < PORT_TIMEOUT) {
+                        sense_hist.timeout++;
+                        if (sense_hist.timeout >= PORT_TIMEOUT) {
+                            sense_hist.state = mSense;
+                            sense_hist.timeout = 0;
+                            master_send_waiting.status = TRUE;
+                        }
+                    }
+                } else {
+                    sense_hist.timeout = 0;
                 }
                 
                 // end of 10 ms counter
@@ -529,6 +547,11 @@ void USART_receive(void)
 		
 		return;
 	}
+    
+    if (last_start == ring_USART_datain.ptr_e) {
+        // data are not being received -> check output buffers
+        last_start = (last_start + check_device_data_to_USB()) & ring_USART_datain.max;
+    }
 	
 	if ((XPRESSNET_DIR == XPRESSNET_OUT) || (!USARTInputData())) return;
 	usart_timeout = 0;
@@ -685,14 +708,14 @@ void parse_command_for_master(BYTE start, BYTE len)
     if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0xA0) {
         // close transistor
         mPwrControlOff;
-        USB_send_status();
+        master_send_waiting.status = TRUE;
     } else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0xA1) {
         // open transistor
         mPwrControlOn;
-        USB_send_status();
+        master_send_waiting.status = TRUE;
     } else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0xA2) {
         // tansistor status request
-        USB_send_status();
+        master_send_waiting.status = TRUE;
     } else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0x80) {
         // version request
         USB_Out_Buffer[0] = 0xA0;
@@ -876,14 +899,23 @@ BOOL USB_send_master_data(BYTE first, BYTE second, BYTE third)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// This function is called periodically when to data are being received
+// to USART_input buffer.
+// This function returns number of bytes added to buffer.
 
-void USB_send_status(void)
+BYTE check_device_data_to_USB(void)
 {
-    USB_Out_Buffer[0] = 0xA0;
-    USB_Out_Buffer[1] = 0x11;
-    USB_Out_Buffer[2] = 0xA0 + mPwrControl + (mSense << 1);
-    USB_Out_Buffer[3] = USB_Out_Buffer[1] ^ USB_Out_Buffer[2];
-    if (mUSBUSARTIsTxTrfReady()) { putUSBUSART(USB_Out_Buffer, 4); }
+    if (master_send_waiting.status) {
+        if (ringFreeSpace(ring_USART_datain) < 4) return;
+        master_send_waiting.status = FALSE;
+        ringAddByte((ring_generic*)&ring_USART_datain, 0xA0);
+        ringAddByte((ring_generic*)&ring_USART_datain, 0x11);
+        ringAddByte((ring_generic*)&ring_USART_datain, 0xA0 + mPwrControl + (sense_hist.state << 1));
+        ringAddByte((ring_generic*)&ring_USART_datain, 0xA0 ^ 0x11 ^ (0xA0 + mPwrControl + (sense_hist.state << 1)));
+        return 4;
+    }
+    
+    return 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
