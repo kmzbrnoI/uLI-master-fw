@@ -4,7 +4,7 @@
  Hardware:		uLI4 - JH&MP 2016
  Complier:		Microchip C18
  Author:		Jan Horacek
- * 
+ *
 /** INCLUDES *******************************************************/
 #include "usb.h"
 #include "usb_function_cdc.h"
@@ -66,46 +66,46 @@
 
 /** D E F I N E S ************************************************************/
 
-#define msg_len(buf,start)      (((buf).data[((start)+1) & (buf).max] & 0x0F)+3)
+#define msg_len(buf,start)		(((buf).data[((start)+1) & (buf).max] & 0x0F)+3)
 
 #define USB_last_message_len	ringDistance(ring_USB_datain, last_start, ring_USB_datain.ptr_e)
 #define USART_last_message_len	ringDistance(ring_USART_datain, last_start, ring_USART_datain.ptr_e)
 
-#define USB_MAX_TIMEOUT                   10		// 100 ms
-#define USART_MAX_TIMEOUT                 50		// 500 us
+#define USB_MAX_TIMEOUT					  10		// 100 ms
+#define USART_MAX_TIMEOUT				  50		// 500 us
 
-#define DEVICE_COUNT                      32
-#define NI_TIMEOUT                        12        // normal inquiery timeout = 120 us
+#define DEVICE_COUNT					  32
+#define NI_TIMEOUT						  12		// normal inquiery timeout = 120 us
 
-#define MLED_IN_MAX_TIMEOUT                5		// 50 ms
-#define MLED_OUT_MAX_TIMEOUT               5		// 50 ms
+#define MLED_IN_MAX_TIMEOUT				   5		// 50 ms
+#define MLED_OUT_MAX_TIMEOUT			   5		// 50 ms
 
-#define PWR_LED_SHORT_COUNT               15		// 150 ms
-#define PWR_LED_LONG_COUNT                40		// 400 ms
-#define PWR_LED_FERR_COUNT                10		// status led indicates >10 framing errors
+#define PWR_LED_SHORT_COUNT				  15		// 150 ms
+#define PWR_LED_LONG_COUNT				  40		// 400 ms
+#define PWR_LED_FERR_COUNT				  10		// status led indicates >10 framing errors
 
 /** V A R I A B L E S ********************************************************/
 #pragma udata
 char USB_Out_Buffer[32];
 
 // USB -> USART ring buffer
-volatile ring_generic ring_USB_datain;      
+volatile ring_generic ring_USB_datain;
 // USART -> USB ring buffer
-volatile ring_generic ring_USART_datain;                                        
+volatile ring_generic ring_USART_datain;
 
 // XpressnET device currently being requested
-volatile current current_dev;                                               
+volatile current current_dev;
 
 #pragma idata
 
 // time between 2 bytes received from USB
 // increment every 100 us -> 100 ms timeout = 1 000
-volatile BYTE usb_timeout = 0;  
+volatile BYTE usb_timeout = 0;
 
 // time between 2 bytes received from USART
 // increment every 100 us -> 100 ms timeout = 1 000
 volatile WORD usart_timeout = 0;
-	
+
 // 10 ms timer counter
 volatile WORD ten_ms_counter = 0;
 
@@ -179,9 +179,9 @@ void USART_receive(void);
 	{
 		_asm goto YourLowPriorityISRCode _endasm
 	}
-	
+
 	#pragma code
-	
+
 	//These are your actual interrupt handling routines.
 	#pragma interrupt YourHighPriorityISRCode
 	void YourHighPriorityISRCode()
@@ -198,9 +198,9 @@ void USART_receive(void);
 		if ((PIE1bits.TXIE) && (PIR1bits.TXIF)) {
 			if (sent_callback) { sent_callback(); }
 		}
-        
-	}	//This return will be a "retfie fast", since this is in a #pragma interrupt section 
-	
+
+	}	//This return will be a "retfie fast", since this is in a #pragma interrupt section
+
 	#pragma interruptlow YourLowPriorityISRCode
 	void YourLowPriorityISRCode()
 	{
@@ -208,98 +208,98 @@ void USART_receive(void);
 		//Service the interrupt
 		//Clear the interrupt flag
 		//Etc.
-		
+
 		// Timer2 on 10 us
 		if ((PIE1bits.TMR2IE) && (PIR1bits.TMR2IF)) {
-			
-            // USART currently requested device timeout
-            if ((current_dev.timeout > 0) && (current_dev.timeout < NI_TIMEOUT)) { current_dev.timeout++; }
-            
-            // XpressNET direction is turned to "IN" as soon as possible after
-            // last byte was sent to XpressNET.
-            // This is done independently on any callbacks. This needs to be done really fast!
+
+			// USART currently requested device timeout
+			if ((current_dev.timeout > 0) && (current_dev.timeout < NI_TIMEOUT)) { current_dev.timeout++; }
+
+			// XpressNET direction is turned to "IN" as soon as possible after
+			// last byte was sent to XpressNET.
+			// This is done independently on any callbacks. This needs to be done really fast!
 			if ((usart_last_byte_sent) && (TXSTAbits.TRMT)) {
-                XPRESSNET_DIR  = XPRESSNET_IN;
-                RCSTAbits.CREN = 1;    // enable USART RX
-            }
-            
-            // Detection of USART device answering normal inquiry.
-            if ((!BAUDCONbits.RCIDL) && (!current_dev.reacted) && (RCSTAbits.CREN)) {
-                // receiver detected start bit -> wait for all data
-                current_dev.reacted = TRUE;
-                current_dev.timeout = 0; // device answered -> provide long window
-                usart_timeout = 0;
-            }
+				XPRESSNET_DIR  = XPRESSNET_IN;
+				RCSTAbits.CREN = 1;    // enable USART RX
+			}
 
-            // usart receive timeout
-            if (usart_timeout < USART_MAX_TIMEOUT) usart_timeout++;
+			// Detection of USART device answering normal inquiry.
+			if ((!BAUDCONbits.RCIDL) && (!current_dev.reacted) && (RCSTAbits.CREN)) {
+				// receiver detected start bit -> wait for all data
+				current_dev.reacted = TRUE;
+				current_dev.timeout = 0; // device answered -> provide long window
+				usart_timeout = 0;
+			}
 
-            if (ten_ms_counter < 1000) { ten_ms_counter++; }
-            else {
-                ten_ms_counter = 0;
-                
-                // 10 ms overflow:
-                
-                // usb receive timeout
-                if (usb_timeout < USB_MAX_TIMEOUT) usb_timeout++;
-	
-    			// mLEDIn timeout
-    			if (mLED_In_Timeout < 2*MLED_IN_MAX_TIMEOUT) {
-    				mLED_In_Timeout++;
-    				if (mLED_In_Timeout == MLED_IN_MAX_TIMEOUT) {
-    					mLED_In_On();
-    				}
-    			}
+			// usart receive timeout
+			if (usart_timeout < USART_MAX_TIMEOUT) usart_timeout++;
 
-                // mLEDOut timeout
-    			if ((mLED_Out_Timeout < 2*MLED_OUT_MAX_TIMEOUT) && (usb_configured)) {
-    				mLED_Out_Timeout++;
-    				if (mLED_Out_Timeout == MLED_OUT_MAX_TIMEOUT) {
-    					mLED_Out_Off();
-    				}
-    			}
+			if (ten_ms_counter < 1000) { ten_ms_counter++; }
+			else {
+				ten_ms_counter = 0;
 
-    			// pwrLED toggling
-    			pwr_led_base_counter++;
-    			if (pwr_led_base_counter >= pwr_led_base_timeout) {
-    				pwr_led_base_counter = 0;
-    				pwr_led_status_counter++;
-				
-                    if (pwr_led_status_counter == 2*pwr_led_status) {
-    					// wait between cycles
-    					pwr_led_base_timeout = PWR_LED_LONG_COUNT;
-                        mLED_Pwr_Off();
-    				} else if (pwr_led_status_counter > 2*pwr_led_status) {
-    					// new base cycle
-    					pwr_led_base_timeout = PWR_LED_SHORT_COUNT;
-    					pwr_led_status_counter = 0;
-    					mLED_Pwr_On();
-    				} else {
-    					mLED_Pwr_Toggle();
-    				}
-                }
-                
-                // sense history
-                if (sense_hist.state != mSense) {
-                    if (sense_hist.timeout < PORT_TIMEOUT) {
-                        sense_hist.timeout++;
-                        if (sense_hist.timeout >= PORT_TIMEOUT) {
-                            sense_hist.state = mSense;
-                            sense_hist.timeout = 0;
-                            master_send_waiting.status = TRUE;
-                        }
-                    }
-                } else {
-                    sense_hist.timeout = 0;
-                }
-                
-                // end of 10 ms counter
-            }
-            
+				// 10 ms overflow:
+
+				// usb receive timeout
+				if (usb_timeout < USB_MAX_TIMEOUT) usb_timeout++;
+
+				// mLEDIn timeout
+				if (mLED_In_Timeout < 2*MLED_IN_MAX_TIMEOUT) {
+					mLED_In_Timeout++;
+					if (mLED_In_Timeout == MLED_IN_MAX_TIMEOUT) {
+						mLED_In_On();
+					}
+				}
+
+				// mLEDOut timeout
+				if ((mLED_Out_Timeout < 2*MLED_OUT_MAX_TIMEOUT) && (usb_configured)) {
+					mLED_Out_Timeout++;
+					if (mLED_Out_Timeout == MLED_OUT_MAX_TIMEOUT) {
+						mLED_Out_Off();
+					}
+				}
+
+				// pwrLED toggling
+				pwr_led_base_counter++;
+				if (pwr_led_base_counter >= pwr_led_base_timeout) {
+					pwr_led_base_counter = 0;
+					pwr_led_status_counter++;
+
+					if (pwr_led_status_counter == 2*pwr_led_status) {
+						// wait between cycles
+						pwr_led_base_timeout = PWR_LED_LONG_COUNT;
+						mLED_Pwr_Off();
+					} else if (pwr_led_status_counter > 2*pwr_led_status) {
+						// new base cycle
+						pwr_led_base_timeout = PWR_LED_SHORT_COUNT;
+						pwr_led_status_counter = 0;
+						mLED_Pwr_On();
+					} else {
+						mLED_Pwr_Toggle();
+					}
+				}
+
+				// sense history
+				if (sense_hist.state != mSense) {
+					if (sense_hist.timeout < PORT_TIMEOUT) {
+						sense_hist.timeout++;
+						if (sense_hist.timeout >= PORT_TIMEOUT) {
+							sense_hist.state = mSense;
+							sense_hist.timeout = 0;
+							master_send_waiting.status = TRUE;
+						}
+					}
+				} else {
+					sense_hist.timeout = 0;
+				}
+
+				// end of 10 ms counter
+			}
+
 			PIR1bits.TMR2IF = 0;		// reset overflow flag
 		}
-		
-	}	//This return will be a "retfie", since this is in a #pragma interruptlow section 
+
+	}	//This return will be a "retfie", since this is in a #pragma interruptlow section
 
 #endif
 
@@ -320,36 +320,36 @@ void main(void)
 			}
 		#endif
 
-        // Normal inquiery answer timeout.
-        // This function is not placed in interrupt to serve interrupt as
-        // fast as possible.
-        if (current_dev.timeout >= NI_TIMEOUT) {
-            // device did not answer in 120 us
-            current_dev.timeout = 0;
-            USART_send_next_frame();
-        }
-        
-        // Transmission to USART ended.
-        // This function is not placed in interrupt to serve interrupt as
-        // fast as possible.
-		if ((usart_last_byte_sent) && (TXSTAbits.TRMT)) {
-    		usart_last_byte_sent = 0;                
-            if (sent_callback) { sent_callback(); }
+		// Normal inquiery answer timeout.
+		// This function is not placed in interrupt to serve interrupt as
+		// fast as possible.
+		if (current_dev.timeout >= NI_TIMEOUT) {
+			// device did not answer in 120 us
+			current_dev.timeout = 0;
+			USART_send_next_frame();
 		}
-            
+
+		// Transmission to USART ended.
+		// This function is not placed in interrupt to serve interrupt as
+		// fast as possible.
+		if ((usart_last_byte_sent) && (TXSTAbits.TRMT)) {
+			usart_last_byte_sent = 0;
+			if (sent_callback) { sent_callback(); }
+		}
+
 		USB_receive();
 		USB_send();
-        USART_receive();
+		USART_receive();
 		CDCTxService();
 	}//end while
 }//end main
 
 void initialize_system(void)
 {
-    ADCON1 = 0x0F;   
-    ADCON0 = 0;
-    
-    init_devices();
+	ADCON1 = 0x0F;
+	ADCON0 = 0;
+
+	init_devices();
 	user_init();
 	init_EEPROM();
 	USBDeviceInit();
@@ -361,21 +361,21 @@ void user_init(void)
 	// init ring buffers
 	ringBufferInit(ring_USB_datain, 32);
 	ringBufferInit(ring_USART_datain, 32);
- 
+
 	// switch off AD convertors (USART is not working when not switched off manually)
 	ANSEL = 0x00;
 	ANSELH = 0x00;
-	
+
 	// Initialize all of the LED pins
 	mInitAllLEDs();
 	mLED_Pwr_On();
 	mLED_In_On();
 	mLED_Out_On();
-	
-    mInitPwrControl;
-    mInitSense;
-    mPwrControlOff;
-    
+
+	mInitPwrControl;
+	mInitSense;
+	mPwrControlOff;
+
 	// setup timer2 on 100 us
 	T2CONbits.T2CKPS = 0b01;	// prescaler 4x
 	PR2 = 30;					// setup timer period register to interrupt every 10 us
@@ -383,18 +383,18 @@ void user_init(void)
 	PIR1bits.TMR2IF = 0;		// reset overflow flag
 	PIE1bits.TMR2IE = 1;		// enable timer2 interrupts
 	IPR1bits.TMR2IP = 0;		// timer2 interrupt low level
-	
+
 	RCONbits.IPEN = 1;			// enable high and low priority interrupts
 	INTCONbits.PEIE = 1;		  // Enable peripheral interrupts
 	INTCONbits.GIE = 1;			// enable global interrupts
 	INTCONbits.GIEH = 1;
 	INTCONbits.GIEL = 1;
 
-    INTCONbits.RABIE = 0;       // enable port interrupts
-    INTCON2bits.RABIP = 1;      // interrupt in high level
-                                // interrupt is fired on port change
-    
-    T2CONbits.TMR2ON = 1;		// enable timer2
+	INTCONbits.RABIE = 0;		// enable port interrupts
+	INTCON2bits.RABIP = 1;		// interrupt in high level
+								// interrupt is fired on port change
+
+	T2CONbits.TMR2ON = 1;		// enable timer2
 }
 
 // ******************************************************************************************************
@@ -435,12 +435,12 @@ void USBCBWakeFromSuspend(void)
 
 void USBCB_SOF_Handler(void)
 {
-	
+
 }
 
 void USBCBErrorHandler(void)
 {
-	
+
 }
 
 void USBCBCheckOtherReq(void)
@@ -457,12 +457,12 @@ void USBCBInitEP(void)
 {
 	CDCInitEP();
 	usb_configured = TRUE;
-    mLED_Out_Off();
+	mLED_Out_Off();
 }
 
 void USBCBSendResume(void)
 {
-	
+
 }
 
 #if defined(ENABLE_EP0_DATA_RECEIVED_CALLBACK)
@@ -475,7 +475,7 @@ BOOL USER_USB_CALLBACK_EVENT_HANDLER(USB_EVENT event, void *pdata, WORD size)
 {
 	switch(event)
 	{
-		case EVENT_CONFIGURED: 
+		case EVENT_CONFIGURED:
 			USBCBInitEP();
 			break;
 		case EVENT_SET_DESCRIPTOR:
@@ -501,8 +501,8 @@ BOOL USER_USB_CALLBACK_EVENT_HANDLER(USB_EVENT event, void *pdata, WORD size)
 			break;
 		default:
 			break;
-	}	   
-	return TRUE; 
+	}
+	return TRUE;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -525,15 +525,15 @@ BYTE calc_xor(BYTE* data, BYTE len)
 
 void USART_receive(void)
 {
-    // We do not check xor in this function intentionally.
-    // XOR should be chacked in PC.
-    
+	// We do not check xor in this function intentionally.
+	// XOR should be chacked in PC.
+
 	static nine_data received = {0, 0};
 	static BYTE last_start = 0;
-	
+
 	// check for (short) timeout
-	if (((last_start != ring_USART_datain.ptr_e) || (current_dev.reacted)) && 
-            (usart_timeout >= USART_MAX_TIMEOUT)) {
+	if (((last_start != ring_USART_datain.ptr_e) || (current_dev.reacted)) &&
+			(usart_timeout >= USART_MAX_TIMEOUT)) {
 		// delete last incoming message and wait for next message
 		ring_USART_datain.ptr_e = last_start;
 		if (ring_USART_datain.ptr_e == ring_USART_datain.ptr_b) ring_USART_datain.empty = TRUE;
@@ -542,49 +542,49 @@ void USART_receive(void)
 		// inform PC about timeout
 		USB_send_master_data(0x01, 0x02, 0x03);
 
-        // send next message to XpressNET
-        USART_send_next_frame();
-		
+		// send next message to XpressNET
+		USART_send_next_frame();
+
 		return;
 	}
-    
-    if (last_start == ring_USART_datain.ptr_e) {
-        // data are not being received -> check output buffers
-        last_start = (last_start + check_device_data_to_USB()) & ring_USART_datain.max;
-    }
-	
+
+	if (last_start == ring_USART_datain.ptr_e) {
+		// data are not being received -> check output buffers
+		last_start = (last_start + check_device_data_to_USB()) & ring_USART_datain.max;
+	}
+
 	if ((XPRESSNET_DIR == XPRESSNET_OUT) || (!USARTInputData())) return;
 	usart_timeout = 0;
-    current_dev.reacted = TRUE;
-    current_dev.timeout = 0;
-		
+	current_dev.reacted = TRUE;
+	current_dev.timeout = 0;
+
 	received = USARTReadByte();
-	
-    if (ringFreeSpace(ring_USART_datain) < 2) {
+
+	if (ringFreeSpace(ring_USART_datain) < 2) {
 		// reset buffer and wait for next message
 		ring_USART_datain.ptr_e = last_start;
 		if (ring_USART_datain.ptr_e == ring_USART_datain.ptr_b) ring_USART_datain.empty = TRUE;
 		return;
 	}
-    
-    if (last_start == ring_USART_datain.ptr_e) {
-        // first byte -> add call byte before first byte
-        ringAddByte((ring_generic*)&ring_USART_datain, calc_parity(current_dev.index + (0b11 << 5)));
-    }
-        
+
+	if (last_start == ring_USART_datain.ptr_e) {
+		// first byte -> add call byte before first byte
+		ringAddByte((ring_generic*)&ring_USART_datain, calc_parity(current_dev.index + (0b11 << 5)));
+	}
+
 	ringAddByte((ring_generic*)&ring_USART_datain, received.data);
-	
+
 	if (USART_last_message_len >= msg_len(ring_USART_datain, last_start)) {
 		// whole message received -> wait a few microseconds and send next data
-        last_start = ring_USART_datain.ptr_e;
-        current_dev.timeout = NI_TIMEOUT / 2;
+		last_start = ring_USART_datain.ptr_e;
+		current_dev.timeout = NI_TIMEOUT / 2;
 	}
-	
-    // toggle LED
-    if (mLED_In_Timeout >= 2*MLED_IN_MAX_TIMEOUT) {
-        mLED_In_Off();
-        mLED_In_Timeout = 0;
-    }
+
+	// toggle LED
+	if (mLED_In_Timeout >= 2*MLED_IN_MAX_TIMEOUT) {
+		mLED_In_Off();
+		mLED_In_Timeout = 0;
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -592,12 +592,12 @@ void USART_receive(void)
 
 void USB_send(void)
 {
-    BYTE len = msg_len(ring_USART_datain, ring_USART_datain.ptr_b);
-    
+	BYTE len = msg_len(ring_USART_datain, ring_USART_datain.ptr_b);
+
 	// check for USB ready
 	if (!mUSBUSARTIsTxTrfReady()) return;
-    
-    if (((ringLength(ring_USART_datain)) >= 3) && (ringLength(ring_USART_datain) >= len)) {
+
+	if (((ringLength(ring_USART_datain)) >= 3) && (ringLength(ring_USART_datain) >= len)) {
 		// send message
 		ringSerialize((ring_generic*)&ring_USART_datain, (BYTE*)USB_Out_Buffer, ring_USART_datain.ptr_b, len);
 		putUSBUSART(USB_Out_Buffer, len);
@@ -614,8 +614,8 @@ void USB_receive(void)
 	static BYTE last_start = 0;
 	BYTE xor, i;
 	BYTE received_len;
-    BOOL parity;
-	
+	BOOL parity;
+
 	if ((USBDeviceState < CONFIGURED_STATE) || (USBSuspendControl == 1)) return;
 
 	if(mUSBUSARTIsTxTrfReady())
@@ -625,13 +625,13 @@ void USB_receive(void)
 			// delete last message
 			ring_USB_datain.ptr_e = last_start;
 			if (ring_USB_datain.ptr_b == ring_USB_datain.ptr_e) ring_USART_datain.empty = TRUE;
-			
+
 			// inform PC about full buffer
 			USB_send_master_data(0x01, 0x06, 0x07);
-			
+
 			return;
 		}
-		
+
 		received_len = getsUSBUSART((ring_generic*)&ring_USB_datain, ringFreeSpace(ring_USB_datain));
 		if (received_len == 0) {
 			// check for timeout
@@ -639,36 +639,36 @@ void USB_receive(void)
 				ring_USB_datain.ptr_e = last_start;
 				usb_timeout = 0;
 				if (ring_USB_datain.ptr_e == ring_USB_datain.ptr_b) ring_USB_datain.empty = TRUE;
-				
+
 				// inform PC about timeout
-                USB_send_master_data(0x01, 0x01, 0x00);
+				USB_send_master_data(0x01, 0x01, 0x00);
 			}
 			return;
-        }
-        
-        // some data received ...
+		}
+
+		// some data received ...
 		usb_timeout = 0;
-		
+
 		// data received -> parse data
-        // at least 3 bytes must be in buffer to start parsing
-        // (call byte + header byte + xor)
+		// at least 3 bytes must be in buffer to start parsing
+		// (call byte + header byte + xor)
 		while ((ringDistance(ring_USB_datain, last_start, ring_USB_datain.ptr_e) >= 3) &&
 				(USB_last_message_len >= msg_len(ring_USB_datain, last_start))) {
-            // while message received
-            
-            // check for parity
+			// while message received
+
+			// check for parity
 			for(i = 0, parity = 0; i < 8; i++) if ((ring_USB_datain.data[last_start] >> i) & 1) parity = !parity;
 			if (parity != 0) {
 				// parity error
-                ringRemoveFromMiddle((ring_generic*)&ring_USB_datain, last_start, msg_len(ring_USB_datain, last_start));
+				ringRemoveFromMiddle((ring_generic*)&ring_USB_datain, last_start, msg_len(ring_USB_datain, last_start));
 				USB_send_master_data(0x01, 0x08, 0x09);
 				return;
 			}
-            
+
 			// check for xor
 			for (i = 0, xor = 0; i < msg_len(ring_USB_datain, last_start)-2; i++)
 				xor ^= ring_USB_datain.data[(i+last_start+1) & ring_USB_datain.max];
-			
+
 			if (xor != ring_USB_datain.data[(i+last_start+1) & ring_USB_datain.max]) {
 				// xor error
 				// delete content in the middle of ring buffer
@@ -676,63 +676,62 @@ void USB_receive(void)
 				USB_send_master_data(0x01, 0x07, 0x06);
 				return;
 			}
-			
+
 			// xor ok -> parse data
-            if (((ring_USB_datain.data[last_start] >> 5) & 0b11) == 0b01) {
-                parse_command_for_master(last_start, msg_len(ring_USB_datain, last_start));
-                
-                // remove message from buffer -> do not move last_start
-                // (message moves in the buffer itself)
-                ringRemoveFromMiddle((ring_generic*)&ring_USB_datain, last_start, msg_len(ring_USB_datain, last_start));                
-            } else {
-                last_start = (last_start+msg_len(ring_USB_datain, last_start))&ring_USB_datain.max;
-            }
+			if (((ring_USB_datain.data[last_start] >> 5) & 0b11) == 0b01) {
+				parse_command_for_master(last_start, msg_len(ring_USB_datain, last_start));
+
+				// remove message from buffer -> do not move last_start
+				// (message moves in the buffer itself)
+				ringRemoveFromMiddle((ring_generic*)&ring_USB_datain, last_start, msg_len(ring_USB_datain, last_start));
+			} else {
+				last_start = (last_start+msg_len(ring_USB_datain, last_start))&ring_USB_datain.max;
+			}
 		}
-        
-        // toggle LED
-        if (mLED_Out_Timeout >= 2*MLED_OUT_MAX_TIMEOUT) {
-            mLED_Out_On();
-            mLED_Out_Timeout = 0;
-        }
-        
+
+		// toggle LED
+		if (mLED_Out_Timeout >= 2*MLED_OUT_MAX_TIMEOUT) {
+			mLED_Out_On();
+			mLED_Out_Timeout = 0;
+		}
+
 	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 /* Parse data intended for master.
- */ 
+ */
 
 void parse_command_for_master(BYTE start, BYTE len)
 {
-    // TODO
-    if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0xA0) {
-        // close transistor
-        mPwrControlOff;
-        master_send_waiting.status = TRUE;
-    } else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0xA1) {
-        // open transistor
-        mPwrControlOn;
-        master_send_waiting.status = TRUE;
-    } else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0xA2) {
-        // tansistor status request
-        master_send_waiting.status = TRUE;
-    } else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0x80) {
-        // version request
-        USB_Out_Buffer[0] = 0xA0;
-        USB_Out_Buffer[1] = 0x13;
-        USB_Out_Buffer[2] = 0x80;
-        USB_Out_Buffer[3] = VERSION_HW;
-        USB_Out_Buffer[4] = VERSION_SW;
-        USB_Out_Buffer[5] = USB_Out_Buffer[1] ^ USB_Out_Buffer[2] ^ USB_Out_Buffer[3] ^ USB_Out_Buffer[4];
-        if (mUSBUSARTIsTxTrfReady()) { putUSBUSART(USB_Out_Buffer, 6); }
-    } else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0x81) {
-        // response request
-        USB_Out_Buffer[0] = 0xA0;
-        USB_Out_Buffer[1] = 0x01;
-        USB_Out_Buffer[2] = 0x04;
-        USB_Out_Buffer[3] = 0x05;
-        if (mUSBUSARTIsTxTrfReady()) { putUSBUSART(USB_Out_Buffer, 4); }
-    }
+	if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0xA0) {
+		// close transistor
+		mPwrControlOff;
+		master_send_waiting.status = TRUE;
+	} else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0xA1) {
+		// open transistor
+		mPwrControlOn;
+		master_send_waiting.status = TRUE;
+	} else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0xA2) {
+		// tansistor status request
+		master_send_waiting.status = TRUE;
+	} else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0x80) {
+		// version request
+		USB_Out_Buffer[0] = 0xA0;
+		USB_Out_Buffer[1] = 0x13;
+		USB_Out_Buffer[2] = 0x80;
+		USB_Out_Buffer[3] = VERSION_HW;
+		USB_Out_Buffer[4] = VERSION_SW;
+		USB_Out_Buffer[5] = USB_Out_Buffer[1] ^ USB_Out_Buffer[2] ^ USB_Out_Buffer[3] ^ USB_Out_Buffer[4];
+		if (mUSBUSARTIsTxTrfReady()) { putUSBUSART(USB_Out_Buffer, 6); }
+	} else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0x81) {
+		// response request
+		USB_Out_Buffer[0] = 0xA0;
+		USB_Out_Buffer[1] = 0x01;
+		USB_Out_Buffer[2] = 0x04;
+		USB_Out_Buffer[3] = 0x05;
+		if (mUSBUSARTIsTxTrfReady()) { putUSBUSART(USB_Out_Buffer, 4); }
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -740,62 +739,62 @@ void parse_command_for_master(BYTE start, BYTE len)
  * This function checks if message is present in USB->USART buffer. If yes,
  * the mesasge is sent to device. Otherwise, next device is requested with
  * normal inquiry.
- */ 
+ */
 
 void USART_send_next_frame(void)
 {
-    BYTE ring_length = ringDistance(ring_USB_datain, ring_USB_datain.ptr_b, ring_USB_datain.ptr_e);
-    RCSTAbits.CREN	= 0;    // disable RX
-    
+	BYTE ring_length = ringDistance(ring_USB_datain, ring_USB_datain.ptr_b, ring_USB_datain.ptr_e);
+	RCSTAbits.CREN	= 0;	// disable RX
+
 	// check if there is a message from PC to be sent to XpressNET
 	if ((ring_length >= 3) && (ring_length >= msg_len(ring_USB_datain, ring_USB_datain.ptr_b))) {
-        // yes -> send the message
-        usart_to_send = (ring_USB_datain.ptr_b + 1) & ring_USB_datain.max;        
-        XPRESSNET_DIR = XPRESSNET_OUT;
-        sent_callback = &(USART_send_rest_of_message);
-        usart_last_byte_sent = 0;
-        USARTWriteByte(1, ring_USB_datain.data[ring_USB_datain.ptr_b]);
-        PIE1bits.TXIE = 1;
-    } else {
-        // no -> send normal inquiry to next XpressNET device        
-        USART_request_next_device();
-    }
+		// yes -> send the message
+		usart_to_send = (ring_USB_datain.ptr_b + 1) & ring_USB_datain.max;
+		XPRESSNET_DIR = XPRESSNET_OUT;
+		sent_callback = &(USART_send_rest_of_message);
+		usart_last_byte_sent = 0;
+		USARTWriteByte(1, ring_USB_datain.data[ring_USB_datain.ptr_b]);
+		PIE1bits.TXIE = 1;
+	} else {
+		// no -> send normal inquiry to next XpressNET device
+		USART_request_next_device();
+	}
 }
 
 /* SEND REST OF MESSAGE TO USART.
  * This fnction is called as callback (from interrupt!) after a byte is
- * sent to USART. It sends next byte. After last byte is sent, 
+ * sent to USART. It sends next byte. After last byte is sent,
  * USART_request_next_device is called as callback.
  */
 void USART_send_rest_of_message(void)
-{    
+{
 	USARTWriteByte(0, ring_USB_datain.data[usart_to_send]);
 	usart_to_send = (usart_to_send+1)&ring_USB_datain.max;
-    
+
 	if (usart_to_send == ((ring_USB_datain.ptr_b + msg_len(ring_USB_datain, ring_USB_datain.ptr_b))&ring_USB_datain.max)) {
-        // last byte sending
-        
-		ring_USB_datain.ptr_b = usart_to_send;  // whole message sent
+		// last byte sending
+
+		ring_USB_datain.ptr_b = usart_to_send;	// whole message sent
 		if (ring_USB_datain.ptr_b == ring_USB_datain.ptr_e) { ring_USB_datain.empty = TRUE; }
-        
-        sent_callback = &(USART_request_next_device);
-        usart_last_byte_sent = 1;
-        PIE1bits.TXIE = 0;
-    } else {
-        // other-than-last byte sending
-        sent_callback = &(USART_send_rest_of_message);
-        usart_last_byte_sent = 0;
-        PIE1bits.TXIE = 1;
-    }
+
+		sent_callback = &(USART_request_next_device);
+		usart_last_byte_sent = 1;
+		PIE1bits.TXIE = 0;
+	} else {
+		// other-than-last byte sending
+		sent_callback = &(USART_send_rest_of_message);
+		usart_last_byte_sent = 0;
+		PIE1bits.TXIE = 1;
+	}
 }
-    
+
 ////////////////////////////////////////////////////////////////////////////////
 
 // request next XpressNET device
 void USART_request_next_device(void)
 {
-    USART_pick_next_device();
-    USART_request_current_device();
+	USART_pick_next_device();
+	USART_request_current_device();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -812,16 +811,16 @@ void dump_buf_to_USB(ring_generic* buf)
 
 void init_EEPROM(void)
 {
-    // TODO: read data from EEPROM at boot
+	// TODO: read data from EEPROM at boot
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
 void init_devices(void)
 {
-    current_dev.index = 0;
-    current_dev.timeout = 1;    // this will cause the processor to send first normal inquiry after some time
-    current_dev.reacted = FALSE;
+	current_dev.index = 0;
+	current_dev.timeout = 1;	// this will cause the processor to send first normal inquiry after some time
+	current_dev.reacted = FALSE;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -829,14 +828,14 @@ void init_devices(void)
 // send normal inquiry to current_dev
 void USART_request_current_device(void)
 {
-    current_dev.timeout = 0;
-    current_dev.reacted = FALSE;
-    XPRESSNET_DIR = XPRESSNET_OUT;
-    sent_callback = &(USART_ni_sent);
-    PIE1bits.TXIE = 0;
-    usart_timeout = 0;
-    USARTWriteByte(1, calc_parity(current_dev.index + (0b10 << 5)));
-    usart_last_byte_sent = TRUE;
+	current_dev.timeout = 0;
+	current_dev.reacted = FALSE;
+	XPRESSNET_DIR = XPRESSNET_OUT;
+	sent_callback = &(USART_ni_sent);
+	PIE1bits.TXIE = 0;
+	usart_timeout = 0;
+	USARTWriteByte(1, calc_parity(current_dev.index + (0b10 << 5)));
+	usart_last_byte_sent = TRUE;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -844,15 +843,15 @@ void USART_request_current_device(void)
 // Calculate parity and return BYTE with the leftmost parity bit (even parity).
 BYTE calc_parity(BYTE data)
 {
-    BYTE i, result, parity;
-    parity = 0;
-    result = data;
-    for (i = 0; i < 7; i++) {
-        if ((data & 0x01) == 0x01) { parity = !parity; }
-        data = (data >> 1);
-    }
-    result |= (parity << 7);
-    return result;
+	BYTE i, result, parity;
+	parity = 0;
+	result = data;
+	for (i = 0; i < 7; i++) {
+		if ((data & 0x01) == 0x01) { parity = !parity; }
+		data = (data >> 1);
+	}
+	result |= (parity << 7);
+	return result;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -861,13 +860,13 @@ BYTE calc_parity(BYTE data)
  * WARNING: this function is called in high-priority interrupt
  * It could aanyhow interleave low-priority interrupt (especially the part
  * working with current_dev.timeout = 0) !!
- */ 
+ */
 void USART_ni_sent(void)
-{    
-    XPRESSNET_DIR = XPRESSNET_IN;
-    current_dev.timeout = 1;  // yes, this could really happen (interrupt queue is unfathomable)
-    if (current_dev.reacted) { current_dev.timeout = 0; } // yes, this too and has its meaning
-    sent_callback = NULL;
+{
+	XPRESSNET_DIR = XPRESSNET_IN;
+	current_dev.timeout = 1;  // yes, this could really happen (interrupt queue is unfathomable)
+	if (current_dev.reacted) { current_dev.timeout = 0; } // yes, this too and has its meaning
+	sent_callback = NULL;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -875,10 +874,10 @@ void USART_ni_sent(void)
 // pick next device
 void USART_pick_next_device(void)
 {
-    current_dev.index++;
-    if (current_dev.index >= DEVICE_COUNT) {
-        current_dev.index = 1;      // 0 == broadcast (not a device)
-    }
+	current_dev.index++;
+	if (current_dev.index >= DEVICE_COUNT) {
+		current_dev.index = 1;		// 0 == broadcast (not a device)
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -886,16 +885,16 @@ void USART_pick_next_device(void)
 // Send 3 bytes to USB.
 BOOL USB_send_master_data(BYTE first, BYTE second, BYTE third)
 {
-    USB_Out_Buffer[0] = 0xA0;
-    USB_Out_Buffer[1] = first;
-    USB_Out_Buffer[2] = second;
-    USB_Out_Buffer[3] = third;
-    if (mUSBUSARTIsTxTrfReady()) {
-        putUSBUSART(USB_Out_Buffer, 4);
-        return TRUE;
-    } else {
-        return FALSE;
-    }
+	USB_Out_Buffer[0] = 0xA0;
+	USB_Out_Buffer[1] = first;
+	USB_Out_Buffer[2] = second;
+	USB_Out_Buffer[3] = third;
+	if (mUSBUSARTIsTxTrfReady()) {
+		putUSBUSART(USB_Out_Buffer, 4);
+		return TRUE;
+	} else {
+		return FALSE;
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -905,17 +904,17 @@ BOOL USB_send_master_data(BYTE first, BYTE second, BYTE third)
 
 BYTE check_device_data_to_USB(void)
 {
-    if (master_send_waiting.status) {
-        if (ringFreeSpace(ring_USART_datain) < 4) return;
-        master_send_waiting.status = FALSE;
-        ringAddByte((ring_generic*)&ring_USART_datain, 0xA0);
-        ringAddByte((ring_generic*)&ring_USART_datain, 0x11);
-        ringAddByte((ring_generic*)&ring_USART_datain, 0xA0 + mPwrControl + (sense_hist.state << 1));
-        ringAddByte((ring_generic*)&ring_USART_datain, 0xA0 ^ 0x11 ^ (0xA0 + mPwrControl + (sense_hist.state << 1)));
-        return 4;
-    }
-    
-    return 0;
+	if (master_send_waiting.status) {
+		if (ringFreeSpace(ring_USART_datain) < 4) return;
+		master_send_waiting.status = FALSE;
+		ringAddByte((ring_generic*)&ring_USART_datain, 0xA0);
+		ringAddByte((ring_generic*)&ring_USART_datain, 0x11);
+		ringAddByte((ring_generic*)&ring_USART_datain, 0xA0 + mPwrControl + (sense_hist.state << 1));
+		ringAddByte((ring_generic*)&ring_USART_datain, 0xA0 ^ 0x11 ^ (0xA0 + mPwrControl + (sense_hist.state << 1)));
+		return 4;
+	}
+
+	return 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
