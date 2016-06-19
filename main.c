@@ -146,9 +146,8 @@ void USB_receive(void);
 void dump_buf_to_USB(ring_generic* buf);
 void USBDeviceTasks(void);
 void parse_command_for_master(BYTE start, BYTE len);
-BOOL USB_send_data(BYTE first, BYTE second, BYTE third);
-void USB_send_transistor_status(void);
-void USB_send_sense_status(void);
+BOOL USB_send_master_data(BYTE first, BYTE second, BYTE third);
+void USB_send_status(void);
 
 // USART (XpressNET) functions
 void USART_send_next_frame(void);
@@ -523,7 +522,7 @@ void USART_receive(void)
 		usart_timeout = 0;
 
 		// inform PC about timeout
-		USB_send_data(0x01, 0x02, 0x03);
+		USB_send_master_data(0x01, 0x02, 0x03);
 
         // send next message to XpressNET
         USART_send_next_frame();
@@ -605,7 +604,7 @@ void USB_receive(void)
 			if (ring_USB_datain.ptr_b == ring_USB_datain.ptr_e) ring_USART_datain.empty = TRUE;
 			
 			// inform PC about full buffer
-			USB_send_data(0x01, 0x06, 0x07);
+			USB_send_master_data(0x01, 0x06, 0x07);
 			
 			return;
 		}
@@ -619,7 +618,7 @@ void USB_receive(void)
 				if (ring_USB_datain.ptr_e == ring_USB_datain.ptr_b) ring_USB_datain.empty = TRUE;
 				
 				// inform PC about timeout
-                USB_send_data(0x01, 0x01, 0x00);
+                USB_send_master_data(0x01, 0x01, 0x00);
 			}
 			return;
         }
@@ -639,7 +638,7 @@ void USB_receive(void)
 			if (parity != 0) {
 				// parity error
                 ringRemoveFromMiddle((ring_generic*)&ring_USB_datain, last_start, msg_len(ring_USB_datain, last_start));
-				USB_send_data(0x01, 0x08, 0x09);
+				USB_send_master_data(0x01, 0x08, 0x09);
 				return;
 			}
             
@@ -651,7 +650,7 @@ void USB_receive(void)
 				// xor error
 				// delete content in the middle of ring buffer
 				ringRemoveFromMiddle((ring_generic*)&ring_USB_datain, last_start, msg_len(ring_USB_datain, last_start));
-				USB_send_data(0x01, 0x07, 0x06);
+				USB_send_master_data(0x01, 0x07, 0x06);
 				return;
 			}
 			
@@ -686,17 +685,14 @@ void parse_command_for_master(BYTE start, BYTE len)
     if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0xA0) {
         // close transistor
         mPwrControlOff;
-        USB_send_transistor_status();
+        USB_send_status();
     } else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0xA1) {
         // open transistor
         mPwrControlOn;
-        USB_send_transistor_status();
+        USB_send_status();
     } else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0xA2) {
         // tansistor status request
-        USB_send_transistor_status();
-    } else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0xB2) {
-        // sense status request
-        USB_send_sense_status();
+        USB_send_status();
     } else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0x80) {
         // version request
         USB_Out_Buffer[0] = 0xA0;
@@ -865,13 +861,14 @@ void USART_pick_next_device(void)
 ////////////////////////////////////////////////////////////////////////////////
 
 // Send 3 bytes to USB.
-BOOL USB_send_data(BYTE first, BYTE second, BYTE third)
-{    
-    USB_Out_Buffer[0] = first;
-    USB_Out_Buffer[1] = second;
-    USB_Out_Buffer[2] = third;
+BOOL USB_send_master_data(BYTE first, BYTE second, BYTE third)
+{
+    USB_Out_Buffer[0] = 0xA0;
+    USB_Out_Buffer[1] = first;
+    USB_Out_Buffer[2] = second;
+    USB_Out_Buffer[3] = third;
     if (mUSBUSARTIsTxTrfReady()) {
-        putUSBUSART(USB_Out_Buffer, 3);
+        putUSBUSART(USB_Out_Buffer, 4);
         return TRUE;
     } else {
         return FALSE;
@@ -880,20 +877,11 @@ BOOL USB_send_data(BYTE first, BYTE second, BYTE third)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void USB_send_transistor_status(void)
+void USB_send_status(void)
 {
     USB_Out_Buffer[0] = 0xA0;
     USB_Out_Buffer[1] = 0x11;
-    USB_Out_Buffer[2] = 0xA0 + mPwrControl;
-    USB_Out_Buffer[3] = USB_Out_Buffer[1] ^ USB_Out_Buffer[2];
-    if (mUSBUSARTIsTxTrfReady()) { putUSBUSART(USB_Out_Buffer, 4); }
-}
-
-void USB_send_sense_status(void)
-{
-    USB_Out_Buffer[0] = 0xA0;
-    USB_Out_Buffer[1] = 0x11;
-    USB_Out_Buffer[2] = 0xB0 + mSense;
+    USB_Out_Buffer[2] = 0xA0 + mPwrControl + (mSense << 1);
     USB_Out_Buffer[3] = USB_Out_Buffer[1] ^ USB_Out_Buffer[2];
     if (mUSBUSARTIsTxTrfReady()) { putUSBUSART(USB_Out_Buffer, 4); }
 }
