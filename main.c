@@ -17,7 +17,6 @@
 #include "usart.h"
 #include "main.h"
 #include "ringBuffer.h"
-#include "eeprom.h"
 
 /** CONFIGURATION **************************************************/
 
@@ -139,7 +138,6 @@ void YourLowPriorityISRCode();
 void user_init(void);
 void initialize_system(void);
 BYTE calc_xor(BYTE* data, BYTE len);
-void init_EEPROM(void);
 void init_devices(void);
 BYTE calc_parity(BYTE data);
 BYTE check_device_data_to_USB(void);
@@ -351,7 +349,6 @@ void initialize_system(void)
 
 	init_devices();
 	user_init();
-	init_EEPROM();
 	USBDeviceInit();
 	USARTInit();
 }
@@ -805,13 +802,6 @@ void dump_buf_to_USB(ring_generic* buf)
 	int i;
 	for (i = 0; i <= buf->max; i++) USB_Out_Buffer[i] = buf->data[i];
 	putUSBUSART(USB_Out_Buffer, buf->max+1);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-void init_EEPROM(void)
-{
-	// TODO: read data from EEPROM at boot
 }
 
 ////////////////////////////////////////////////////////////////////////////////
