@@ -70,6 +70,13 @@
 #define USB_last_message_len	ringDistance(ring_USB_datain, last_start, ring_USB_datain.ptr_e)
 #define USART_last_message_len	ringDistance(ring_USART_datain, last_start, ring_USART_datain.ptr_e)
 
+#define RESET_BUS               current_dev.reacted = FALSE; \
+                                current_dev.timeout = 1; \
+                                current_dev.index = 1; \
+                                active_devices = 0; \
+                                dirty_devices = 0; \
+                                RCSTAbits.CREN = 0
+
 #define IsRACKRound             (current_dev.round == ROUND_RACK)
 
 #define USB_MAX_TIMEOUT					  10		// 100 ms
@@ -252,6 +259,18 @@ void USART_receive(void);
                     }
                 }
                 
+                if ((keep_alive.receive) && (keep_alive.receive_timer < KA_RECEIVE_MAX)) {
+                    keep_alive.receive_timer++;
+                    if (keep_alive.receive_timer == KA_RECEIVE_MAX) {
+                        // computer crashed -> turn the bus off
+                        mPwrControlPin = mPwrControlOff;                        
+                        RESET_BUS;
+                        keep_alive.receive_timer = 0;
+                        keep_alive.receive = FALSE;                        
+                        master_send_waiting.status = TRUE;
+                    }
+                }
+                
                 #ifndef DEBUG                
                     // mLEDIn timeout
                     if (mLED_In_Timeout < 2*MLED_IN_MAX_TIMEOUT) {
@@ -296,6 +315,7 @@ void USART_receive(void);
 						sense_hist.timeout++;
 						if (sense_hist.timeout >= PORT_TIMEOUT) {
 							sense_hist.state = mSense;
+                            if (!mSense) { RESET_BUS; }
 							sense_hist.timeout = 0;
 							master_send_waiting.status = TRUE;
 						}
@@ -334,7 +354,7 @@ void main(void)
 		// Normal inquiery answer timeout.
 		// This function is not placed in interrupt to serve interrupt as
 		// fast as possible.
-		if (current_dev.timeout >= NI_TIMEOUT) {
+		if ((current_dev.timeout >= NI_TIMEOUT) && (mPwrControl) && (sense_hist.state)) {
 			// device did not answer in 120 us
             
             #ifdef RACK_ENABLE
@@ -399,7 +419,7 @@ void user_init(void)
 	mLED_Out_On();
 
 	mInitPwrControl;
-	mPwrControlOff;    
+	mPwrControlPin = mPwrControlOff;
 	mInitSense;
 
 	// setup timer2 on 100 us
@@ -569,7 +589,7 @@ void USART_receive(void)
 		USB_send_master_data(0x01, 0x02, 0x03);
 
 		// send next message to XpressNET
-		USART_send_next_frame();
+        USART_send_next_frame();
 
 		return;
 	}
@@ -579,7 +599,7 @@ void USART_receive(void)
 		last_start = (last_start + check_device_data_to_USB()) & ring_USART_datain.max;
 	}
 
-	if ((XPRESSNET_DIR == XPRESSNET_OUT) || (!USARTInputData())) return;
+	if ((XPRESSNET_DIR == XPRESSNET_OUT) || (!USARTInputData())) { return; }
     
 	usart_timeout = 0;
 	current_dev.reacted = TRUE;
@@ -595,9 +615,6 @@ void USART_receive(void)
 
 	received = USARTReadByte();
 
-    // we do not send acknowledgement response to PC
-    // if (IsRACKRound) return;
-    
 	if (ringFreeSpace(ring_USART_datain) < 2) {
 		// reset buffer and wait for next message
 		ring_USART_datain.ptr_e = last_start;
@@ -735,6 +752,18 @@ void USB_receive(void)
 				// (message moves in the buffer itself)
 				ringRemoveFromMiddle((ring_generic*)&ring_USB_datain, last_start, msg_len(ring_USB_datain, last_start));
 			} else {
+                if (!sense_hist.state) {
+                    ringRemoveFromMiddle((ring_generic*)&ring_USB_datain, last_start, msg_len(ring_USB_datain, last_start));
+                    USB_send_master_data(0x01, 0x09, 0x08);
+                    return;
+                }
+                
+                if (!mPwrControl) {
+                    ringRemoveFromMiddle((ring_generic*)&ring_USB_datain, last_start, msg_len(ring_USB_datain, last_start));                    
+                    USB_send_master_data(0x01, 0x0A, 0x0B);
+                    return;
+                }                
+                
 				last_start = (last_start+msg_len(ring_USB_datain, last_start))&ring_USB_datain.max;
 			}
 		}
@@ -756,18 +785,22 @@ void USB_receive(void)
 
 void parse_command_for_master(BYTE start, BYTE len)
 {
-	if ((ring_USB_datain.data[(start+2)&ring_USB_datain.max] >> 4) == 0xA) {
+    BYTE db1 = ring_USB_datain.data[(start+2)&ring_USB_datain.max];
+    
+	if ((db1 >> 4) == 0xA) {
 		// set master status
-		mPwrControlPin = !(ring_USB_datain.data[(start+2)&ring_USB_datain.max] & 0b1);
-        keep_alive.send = ((ring_USB_datain.data[(start+2)&ring_USB_datain.max] >> 3) & 0b1);
-        keep_alive.receive = ((ring_USB_datain.data[(start+2)&ring_USB_datain.max] >> 2) & 0b1);
+		mPwrControlPin = !(db1 & 0b1);
+        RCSTAbits.CREN = (db1 & 0b1);
+        if (!RCSTAbits.CREN) { RESET_BUS; }
+        keep_alive.send = ((db1 >> 3) & 0b1);
+        keep_alive.receive = ((db1 >> 2) & 0b1);
         keep_alive.receive_timer = 0;
         keep_alive.send_timer = 0;
 		master_send_waiting.status = TRUE;
-	} else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0xA2) {
+	} else if (db1 == 0xA2) {
 		// tansistor status request
 		master_send_waiting.status = TRUE;
-	} else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0x80) {
+	} else if (db1 == 0x80) {
 		// version request
 		USB_Out_Buffer[0] = 0xA0;
 		USB_Out_Buffer[1] = 0x13;
@@ -776,16 +809,19 @@ void parse_command_for_master(BYTE start, BYTE len)
 		USB_Out_Buffer[4] = VERSION_SW;
 		USB_Out_Buffer[5] = USB_Out_Buffer[1] ^ USB_Out_Buffer[2] ^ USB_Out_Buffer[3] ^ USB_Out_Buffer[4];
 		if (mUSBUSARTIsTxTrfReady()) { putUSBUSART(USB_Out_Buffer, 6); }
-	} else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0x81) {
+	} else if (db1 == 0x81) {
 		// response request
 		USB_Out_Buffer[0] = 0xA0;
 		USB_Out_Buffer[1] = 0x01;
 		USB_Out_Buffer[2] = 0x04;
 		USB_Out_Buffer[3] = 0x05;
 		if (mUSBUSARTIsTxTrfReady()) { putUSBUSART(USB_Out_Buffer, 4); }
-	} else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0x82) {
+	} else if (db1 == 0x82) {
         // active device list request
         master_send_waiting.active_devices = TRUE;
+    } else if (db1 == 0x05) {
+        // keep-alive
+        keep_alive.receive_timer = 0;
     }
 }
 
