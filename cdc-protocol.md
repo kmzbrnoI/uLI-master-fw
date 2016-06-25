@@ -52,6 +52,7 @@ is XOR of *Header byte, Data byte 1 .. Data byte n*.
 |-----------|-------------|-------------|--------|--------|--------|------------------------------------------|
 | 0xA0      | 0x11        | 0xA 0b00ST  | XOR    | -      | -      | Master status (S = sense, T = transistor)|
 | 0xA0      | 0x13        | 0x80        | 0xHW   | 0xSW   | XOR    | Master SW and HW version response        |
+| 0xA0      | 0x15        | 0x82        | DEVB1  | DEVB2  | ...    | Active devices list                      |
 
 ## PC → Master commands
 
@@ -62,3 +63,4 @@ is XOR of *Header byte, Data byte 1 .. Data byte n*.
 | 0xA0      | 0x11        | 0xA2        | XOR    | -      | -      | Master`s status request                  |
 | 0xA0      | 0x11        | 0x80        | XOR    | -      | -      | Master`s version request                 |
 | 0xA0      | 0x11        | 0x81        | XOR    | -      | -      | Response request                         |
+| 0xA0      | 0x11        | 0x82        | XOR    | -      | -      | Active devices list request              |

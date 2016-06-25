@@ -70,6 +70,8 @@
 #define USB_last_message_len	ringDistance(ring_USB_datain, last_start, ring_USB_datain.ptr_e)
 #define USART_last_message_len	ringDistance(ring_USART_datain, last_start, ring_USART_datain.ptr_e)
 
+#define IsRACKRound             (current_dev.round == ROUND_RACK)
+
 #define USB_MAX_TIMEOUT					  10		// 100 ms
 #define USART_MAX_TIMEOUT				  50		// 500 us
 
@@ -92,10 +94,10 @@ volatile ring_generic ring_USB_datain;
 // USART -> USB ring buffer
 volatile ring_generic ring_USART_datain;
 
-// XpressnET device currently being requested
-volatile current current_dev;
-
 #pragma idata
+
+// XpressnET device currently being requested
+volatile current current_dev = {0,0,0,0};
 
 // time between 2 bytes received from USB
 // increment every 100 us -> 100 ms timeout = 1 000
@@ -116,6 +118,9 @@ volatile BYTE usart_to_send = 0;
 volatile BOOL usart_last_byte_sent = FALSE;
 
 volatile BOOL usb_configured = FALSE;
+
+volatile UINT32 active_devices = 0;
+volatile UINT32 dirty_devices = 0;
 
 volatile BYTE mLED_In_Timeout = 2*MLED_IN_MAX_TIMEOUT;
 volatile BYTE mLED_Out_Timeout = 2*MLED_OUT_MAX_TIMEOUT;
@@ -155,9 +160,7 @@ void USB_buffer_status(void);
 void USART_send_next_frame(void);
 void USART_send_rest_of_message(void);
 void USART_request_next_device(void);
-void USART_request_current_device(void);
 void USART_ni_sent(void);
-void USART_pick_next_device(void);
 void USART_send(void);
 void USART_receive(void);
 
@@ -216,13 +219,10 @@ void USART_receive(void);
 			// XpressNET direction is turned to "IN" as soon as possible after
 			// last byte was sent to XpressNET.
 			// This is done independently on any callbacks. This needs to be done really fast!
-			if ((usart_last_byte_sent) && (TXSTAbits.TRMT)) {
-				XPRESSNET_DIR  = XPRESSNET_IN;
-				RCSTAbits.CREN = 1;    // enable USART RX
-			}
+			if ((usart_last_byte_sent) && (TXSTAbits.TRMT)) { XPRESSNET_DIR = XPRESSNET_IN; }
 
 			// Detection of USART device answering normal inquiry.
-			if ((!BAUDCONbits.RCIDL) && (!current_dev.reacted) && (RCSTAbits.CREN)) {
+			if ((!BAUDCONbits.RCIDL) && (!current_dev.reacted) && (XPRESSNET_DIR == XPRESSNET_IN)) {
 				// receiver detected start bit -> wait for all data
 				current_dev.reacted = TRUE;
 				current_dev.timeout = 0; // device answered -> provide long window
@@ -241,21 +241,23 @@ void USART_receive(void);
 				// usb receive timeout
 				if (usb_timeout < USB_MAX_TIMEOUT) usb_timeout++;
 
-				// mLEDIn timeout
-				if (mLED_In_Timeout < 2*MLED_IN_MAX_TIMEOUT) {
-					mLED_In_Timeout++;
-					if (mLED_In_Timeout == MLED_IN_MAX_TIMEOUT) {
-						mLED_In_On();
-					}
-				}
+                #ifndef DEBUG                
+                    // mLEDIn timeout
+                    if (mLED_In_Timeout < 2*MLED_IN_MAX_TIMEOUT) {
+    					mLED_In_Timeout++;
+    					if (mLED_In_Timeout == MLED_IN_MAX_TIMEOUT) {
+    						mLED_In_On();
+    					}
+    				}
 
-				// mLEDOut timeout
-				if ((mLED_Out_Timeout < 2*MLED_OUT_MAX_TIMEOUT) && (usb_configured)) {
-					mLED_Out_Timeout++;
-					if (mLED_Out_Timeout == MLED_OUT_MAX_TIMEOUT) {
-						mLED_Out_Off();
-					}
-				}
+                    // mLEDOut timeout
+                    if ((mLED_Out_Timeout < 2*MLED_OUT_MAX_TIMEOUT) && (usb_configured)) {
+    					mLED_Out_Timeout++;
+    					if (mLED_Out_Timeout == MLED_OUT_MAX_TIMEOUT) {
+    						mLED_Out_Off();
+    					}
+    				}
+                #endif
 
 				// pwrLED toggling
 				pwr_led_base_counter++;
@@ -323,6 +325,22 @@ void main(void)
 		// fast as possible.
 		if (current_dev.timeout >= NI_TIMEOUT) {
 			// device did not answer in 120 us
+            
+            #ifdef RACK_ENABLE
+                if (IsRACKRound) {
+                    // device did not answer request for acknowledgement
+                    if ((dirty_devices >> current_dev.index) & 0b1) {
+                        // for second time -> device is not active
+                        dirty_devices &= ~((UINT32)1 << current_dev.index);
+                        active_devices &= ~((UINT32)1 << current_dev.index);
+                        master_send_waiting.active_devices = TRUE;
+                    } else {
+                        // for first time -> notice
+                        dirty_devices |= ((UINT32)1 << current_dev.index);
+                    }
+                }
+            #endif
+
 			current_dev.timeout = 0;
 			USART_send_next_frame();
 		}
@@ -370,8 +388,8 @@ void user_init(void)
 	mLED_Out_On();
 
 	mInitPwrControl;
+	mPwrControlOff;    
 	mInitSense;
-	mPwrControlOff;
 
 	// setup timer2 on 100 us
 	T2CONbits.T2CKPS = 0b01;	// prescaler 4x
@@ -523,7 +541,7 @@ BYTE calc_xor(BYTE* data, BYTE len)
 void USART_receive(void)
 {
 	// We do not check xor in this function intentionally.
-	// XOR should be chacked in PC.
+	// XOR should be checked in PC.
 
 	static nine_data received = {0, 0};
 	static BYTE last_start = 0;
@@ -551,12 +569,24 @@ void USART_receive(void)
 	}
 
 	if ((XPRESSNET_DIR == XPRESSNET_OUT) || (!USARTInputData())) return;
+    
 	usart_timeout = 0;
 	current_dev.reacted = TRUE;
 	current_dev.timeout = 0;
+        
+    #ifdef RACK_ENABLE
+        if (!((active_devices >> current_dev.index) & 0b1)) {
+            active_devices |= ((UINT32)1 << current_dev.index);
+            master_send_waiting.active_devices = TRUE;
+        }
+        dirty_devices &= ~((UINT32)1 << current_dev.index);
+    #endif
 
 	received = USARTReadByte();
 
+    // we do not send acknowledgement response to PC
+    // if (IsRACKRound) return;
+    
 	if (ringFreeSpace(ring_USART_datain) < 2) {
 		// reset buffer and wait for next message
 		ring_USART_datain.ptr_e = last_start;
@@ -572,16 +602,28 @@ void USART_receive(void)
 	ringAddByte((ring_generic*)&ring_USART_datain, received.data);
 
 	if (USART_last_message_len >= msg_len(ring_USART_datain, last_start)) {
+        #ifdef RACK_ENABLE
+            if (IsRACKRound) {
+                ring_USART_datain.ptr_e = last_start;
+                if (ring_USART_datain.ptr_e == ring_USART_datain.ptr_b) ring_USART_datain.empty = TRUE;
+            } else {
+                last_start = ring_USART_datain.ptr_e;
+            }
+        #else
+            last_start = ring_USART_datain.ptr_e;
+        #endif
+        
 		// whole message received -> wait a few microseconds and send next data
-		last_start = ring_USART_datain.ptr_e;
 		current_dev.timeout = NI_TIMEOUT / 2;
 	}
 
 	// toggle LED
-	if (mLED_In_Timeout >= 2*MLED_IN_MAX_TIMEOUT) {
-		mLED_In_Off();
-		mLED_In_Timeout = 0;
-	}
+    #ifndef DEBUG
+        if (mLED_In_Timeout >= 2*MLED_IN_MAX_TIMEOUT) {
+    		mLED_In_Off();
+    		mLED_In_Timeout = 0;
+    	}
+    #endif
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -687,10 +729,12 @@ void USB_receive(void)
 		}
 
 		// toggle LED
-		if (mLED_Out_Timeout >= 2*MLED_OUT_MAX_TIMEOUT) {
-			mLED_Out_On();
-			mLED_Out_Timeout = 0;
-		}
+        #ifndef DEBUG
+            if (mLED_Out_Timeout >= 2*MLED_OUT_MAX_TIMEOUT) {
+    			mLED_Out_On();
+    			mLED_Out_Timeout = 0;
+    		}
+        #endif
 
 	}
 }
@@ -728,7 +772,10 @@ void parse_command_for_master(BYTE start, BYTE len)
 		USB_Out_Buffer[2] = 0x04;
 		USB_Out_Buffer[3] = 0x05;
 		if (mUSBUSARTIsTxTrfReady()) { putUSBUSART(USB_Out_Buffer, 4); }
-	}
+	} else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0x82) {
+        // active device list request
+        master_send_waiting.active_devices = TRUE;
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -741,7 +788,7 @@ void parse_command_for_master(BYTE start, BYTE len)
 void USART_send_next_frame(void)
 {
 	BYTE ring_length = ringDistance(ring_USB_datain, ring_USB_datain.ptr_b, ring_USB_datain.ptr_e);
-	RCSTAbits.CREN	= 0;	// disable RX
+	//RCSTAbits.CREN	= 0;	// disable RX
 
 	// check if there is a message from PC to be sent to XpressNET
 	if ((ring_length >= 3) && (ring_length >= msg_len(ring_USB_datain, ring_USB_datain.ptr_b))) {
@@ -790,8 +837,50 @@ void USART_send_rest_of_message(void)
 // request next XpressNET device
 void USART_request_next_device(void)
 {
-	USART_pick_next_device();
-	USART_request_current_device();
+    UINT32 tmp = 0;
+    
+    // 1) pick next device
+	current_dev.index++;
+	if (current_dev.index >= DEVICE_COUNT) {
+        current_dev.round++;
+        if (current_dev.round >= ROUND_MAX) { current_dev.round = 0; }
+		current_dev.index = 1;		// 0 == broadcast (not a device)        
+	}
+	
+    #ifdef RACK_ENABLE
+        // Are we supposed to send request for acknowledgement (RACK)?
+        // Which device are we supposed to send RACK to?
+        if (IsRACKRound) {
+            tmp = active_devices >> current_dev.index;
+            if (tmp == 0) {
+                // all active devices requested in this round
+                current_dev.round = 0;
+                current_dev.index = 1;
+            } else {
+                // at least one active device has not been requested in
+                // this round yet -> find it and request it
+                while (!(tmp&0b1)) {
+                    tmp = tmp >> 1;
+                    current_dev.index++;
+                }
+            }
+        }
+    #endif
+
+	// 2) request current device
+    RCSTAbits.CREN = 1;    // enable USART RX -- to be sure (because of overrun error)
+    current_dev.timeout = 0;
+	current_dev.reacted = FALSE;
+	XPRESSNET_DIR = XPRESSNET_OUT;
+	sent_callback = &(USART_ni_sent);
+	PIE1bits.TXIE = 0;
+	usart_timeout = 0;
+    #ifdef RACK_ENABLE
+    	USARTWriteByte(1, calc_parity(current_dev.index + ((!IsRACKRound) << 6)));   // send normal inquiry or request acknowledgement
+    #else
+        USARTWriteByte(1, calc_parity(current_dev.index + (0x40)));   // send normal inquiry
+    #endif
+	usart_last_byte_sent = TRUE;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -811,21 +900,6 @@ void init_devices(void)
 	current_dev.index = 0;
 	current_dev.timeout = 1;	// this will cause the processor to send first normal inquiry after some time
 	current_dev.reacted = FALSE;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-// send normal inquiry to current_dev
-void USART_request_current_device(void)
-{
-	current_dev.timeout = 0;
-	current_dev.reacted = FALSE;
-	XPRESSNET_DIR = XPRESSNET_OUT;
-	sent_callback = &(USART_ni_sent);
-	PIE1bits.TXIE = 0;
-	usart_timeout = 0;
-	USARTWriteByte(1, calc_parity(current_dev.index + (0b10 << 5)));
-	usart_last_byte_sent = TRUE;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -852,22 +926,11 @@ BYTE calc_parity(BYTE data)
  * working with current_dev.timeout = 0) !!
  */
 void USART_ni_sent(void)
-{
+{    
 	XPRESSNET_DIR = XPRESSNET_IN;
-	current_dev.timeout = 1;  // yes, this could really happen (interrupt queue is unfathomable)
-	if (current_dev.reacted) { current_dev.timeout = 0; } // yes, this too and has its meaning
+	current_dev.timeout = 1;
+	if (current_dev.reacted) { current_dev.timeout = 0; } // yes, this code has its meaning
 	sent_callback = NULL;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-// pick next device
-void USART_pick_next_device(void)
-{
-	current_dev.index++;
-	if (current_dev.index >= DEVICE_COUNT) {
-		current_dev.index = 1;		// 0 == broadcast (not a device)
-	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -902,7 +965,23 @@ BYTE check_device_data_to_USB(void)
 		ringAddByte((ring_generic*)&ring_USART_datain, 0xA0 + mPwrControl + (sense_hist.state << 1));
 		ringAddByte((ring_generic*)&ring_USART_datain, 0xA0 ^ 0x11 ^ (0xA0 + mPwrControl + (sense_hist.state << 1)));
 		return 4;
-	}
+	} else if (master_send_waiting.active_devices)    {
+        if (ringFreeSpace(ring_USART_datain) < 8) return;
+        master_send_waiting.active_devices = FALSE;
+        
+		ringAddByte((ring_generic*)&ring_USART_datain, 0xA0);
+		ringAddByte((ring_generic*)&ring_USART_datain, 0x15);
+		ringAddByte((ring_generic*)&ring_USART_datain, 0x82);        
+		ringAddByte((ring_generic*)&ring_USART_datain, active_devices >> 24);
+        ringAddByte((ring_generic*)&ring_USART_datain, (active_devices >> 16) & 0xFF);
+        ringAddByte((ring_generic*)&ring_USART_datain, (active_devices >> 8) & 0xFF);
+        ringAddByte((ring_generic*)&ring_USART_datain, active_devices & 0xFF);
+        
+        ringAddByte((ring_generic*)&ring_USART_datain, 0x97 ^ (active_devices >> 24) ^ 
+                    ((active_devices >> 16) & 0xFF) ^ (active_devices >> 8) & 0xFF ^ (active_devices & 0xFF));
+        
+        return 8;
+    }
 
 	return 0;
 }

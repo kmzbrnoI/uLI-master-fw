@@ -29,7 +29,7 @@ void USARTInit(void)
 	RCSTAbits.RX9	= 1;  // 9-bit receiving
 	//RCSTAbits.ADDEN = 1;  // enable address detection
 						  // TX interrupt must be in high level (otherwise will not match 80 us window)
-	RCSTAbits.CREN	= 0;  // disable RX
+	RCSTAbits.CREN	= 1;  // enable RX
 	TXSTAbits.TXEN	= 1;  // enable TX
 }
 
