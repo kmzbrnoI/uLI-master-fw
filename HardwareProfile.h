@@ -77,8 +77,9 @@
 
     #define mInitPwrControl      (TRISCbits.TRISC4 = 0)
     #define mPwrControl          (!LATCbits.LATC4)
-    #define mPwrControlOn        (LATCbits.LATC4 = 0)
-    #define mPwrControlOff       (LATCbits.LATC4 = 1)
+    #define mPwrControlPin       (LATCbits.LATC4)
+    #define mPwrControlOn        (0)
+    #define mPwrControlOff       (1)
    
 
 #endif  //HARDWARE_PROFILE_H

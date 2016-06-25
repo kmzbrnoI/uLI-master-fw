@@ -36,7 +36,18 @@ typedef struct {
 typedef struct {
 	BOOL status :1;
     BOOL active_devices :1;
+    BOOL keep_alive :1;
 } master_waiting;
+
+#define KA_RECEIVE_MAX      500     // 5 s = keep-alive receive timeout
+#define KA_SEND_INTERVAL    100     // 1 s = keep-alive packet sending
+
+typedef struct {
+    BOOL receive :1;        // disable bus after not receiving keep-alive packets
+    BOOL send :1;           // send keep-alive packets
+    WORD receive_timer;
+    BYTE send_timer;
+} alive;
 
 #endif /* MAIN_H */
 

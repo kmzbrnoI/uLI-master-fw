@@ -122,6 +122,8 @@ volatile BOOL usb_configured = FALSE;
 volatile UINT32 active_devices = 0;
 volatile UINT32 dirty_devices = 0;
 
+volatile alive keep_alive = {0,0,0,0};
+
 volatile BYTE mLED_In_Timeout = 2*MLED_IN_MAX_TIMEOUT;
 volatile BYTE mLED_Out_Timeout = 2*MLED_OUT_MAX_TIMEOUT;
 
@@ -241,6 +243,15 @@ void USART_receive(void);
 				// usb receive timeout
 				if (usb_timeout < USB_MAX_TIMEOUT) usb_timeout++;
 
+                // keep-alive
+                if ((keep_alive.send) && (keep_alive.send_timer < KA_SEND_INTERVAL)) {
+                    keep_alive.send_timer++;
+                    if (keep_alive.send_timer == KA_SEND_INTERVAL) {
+                        keep_alive.send_timer = 0;
+                        master_send_waiting.keep_alive = TRUE;
+                    }
+                }
+                
                 #ifndef DEBUG                
                     // mLEDIn timeout
                     if (mLED_In_Timeout < 2*MLED_IN_MAX_TIMEOUT) {
@@ -745,13 +756,13 @@ void USB_receive(void)
 
 void parse_command_for_master(BYTE start, BYTE len)
 {
-	if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0xA0) {
-		// close transistor
-		mPwrControlOff;
-		master_send_waiting.status = TRUE;
-	} else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0xA1) {
-		// open transistor
-		mPwrControlOn;
+	if ((ring_USB_datain.data[(start+2)&ring_USB_datain.max] >> 4) == 0xA) {
+		// set master status
+		mPwrControlPin = !(ring_USB_datain.data[(start+2)&ring_USB_datain.max] & 0b1);
+        keep_alive.send = ((ring_USB_datain.data[(start+2)&ring_USB_datain.max] >> 3) & 0b1);
+        keep_alive.receive = ((ring_USB_datain.data[(start+2)&ring_USB_datain.max] >> 2) & 0b1);
+        keep_alive.receive_timer = 0;
+        keep_alive.send_timer = 0;
 		master_send_waiting.status = TRUE;
 	} else if (ring_USB_datain.data[(start+2)&ring_USB_datain.max] == 0xA2) {
 		// tansistor status request
@@ -957,16 +968,19 @@ BOOL USB_send_master_data(BYTE first, BYTE second, BYTE third)
 
 BYTE check_device_data_to_USB(void)
 {
+    BYTE tmp;
+    
 	if (master_send_waiting.status) {
-		if (ringFreeSpace(ring_USART_datain) < 4) return;
+		if (ringFreeSpace(ring_USART_datain) < 4) return 0;
 		master_send_waiting.status = FALSE;
+        tmp = 0xA0 + mPwrControl + (sense_hist.state << 1) + (keep_alive.receive << 2) + (keep_alive.send << 3);
 		ringAddByte((ring_generic*)&ring_USART_datain, 0xA0);
 		ringAddByte((ring_generic*)&ring_USART_datain, 0x11);
-		ringAddByte((ring_generic*)&ring_USART_datain, 0xA0 + mPwrControl + (sense_hist.state << 1));
-		ringAddByte((ring_generic*)&ring_USART_datain, 0xA0 ^ 0x11 ^ (0xA0 + mPwrControl + (sense_hist.state << 1)));
+		ringAddByte((ring_generic*)&ring_USART_datain, tmp);
+		ringAddByte((ring_generic*)&ring_USART_datain, 0xB1 ^ tmp);
 		return 4;
 	} else if (master_send_waiting.active_devices)    {
-        if (ringFreeSpace(ring_USART_datain) < 8) return;
+        if (ringFreeSpace(ring_USART_datain) < 8) return 0;
         master_send_waiting.active_devices = FALSE;
         
 		ringAddByte((ring_generic*)&ring_USART_datain, 0xA0);
@@ -981,6 +995,14 @@ BYTE check_device_data_to_USB(void)
                     ((active_devices >> 16) & 0xFF) ^ (active_devices >> 8) & 0xFF ^ (active_devices & 0xFF));
         
         return 8;
+    } else if (master_send_waiting.keep_alive) {
+        if (ringFreeSpace(ring_USART_datain) < 4) return 0;
+        master_send_waiting.keep_alive = FALSE;
+		ringAddByte((ring_generic*)&ring_USART_datain, 0xA0);
+		ringAddByte((ring_generic*)&ring_USART_datain, 0x01);
+		ringAddByte((ring_generic*)&ring_USART_datain, 0x05);
+		ringAddByte((ring_generic*)&ring_USART_datain, 0x04);
+        return 4;
     }
 
 	return 0;

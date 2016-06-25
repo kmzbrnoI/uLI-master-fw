@@ -50,7 +50,9 @@ is XOR of *Header byte, Data byte 1 .. Data byte n*.
 | 0xA0      | 0x01        | 0x09        | XOR    | -      | -      | XpressNET power source turned off        |
 | 0xA0      | 0x01        | 0x0A        | XOR    | -      | -      | XpressNET power transistor closed        |
 |-----------|-------------|-------------|--------|--------|--------|------------------------------------------|
-| 0xA0      | 0x11        | 0xA 0b00ST  | XOR    | -      | -      | Master status (S = sense, T = transistor)|
+| 0xA0      | 0x11        | 0xA 0bNRST  | XOR    | -      | -      | Master status (S = sense, T = transistor
+                                                                     R = keep-alive receiving,
+                                                                     N = keep-alive sending                  )|
 | 0xA0      | 0x13        | 0x80        | 0xHW   | 0xSW   | XOR    | Master SW and HW version response        |
 | 0xA0      | 0x15        | 0x82        | DEVB1  | DEVB2  | ...    | Active devices list                      |
 
@@ -59,7 +61,10 @@ is XOR of *Header byte, Data byte 1 .. Data byte n*.
 | Call byte | Header byte | Data byte 1 | Data 2 | Data 3 | Data 4 |                 Meaning                  |
 |-----------|-------------|-------------|--------|--------|--------|------------------------------------------|
 | 0xA0      | 0x01        | 0x05        | XOR    | -      | -      | Keep-alive                               |
-| 0xA0      | 0x11        | 0xA 0b000T  | XOR    | -      | -      | Set transistor to T                      |
+| 0xA0      | 0x11        | 0xA 0bNR0T  | XOR    | -      | -      | Set master status                        |
+                                                                     T = transistor,
+                                                                     R = keep-alive receiving,
+                                                                     N = keep-alive sending                   |
 | 0xA0      | 0x11        | 0xA2        | XOR    | -      | -      | Master`s status request                  |
 | 0xA0      | 0x11        | 0x80        | XOR    | -      | -      | Master`s version request                 |
 | 0xA0      | 0x11        | 0x81        | XOR    | -      | -      | Response request                         |
