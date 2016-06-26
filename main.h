@@ -33,10 +33,13 @@ typedef struct {
 	BOOL state;
 } port_history;
 
-typedef struct {
-	BOOL status :1;
-    BOOL active_devices :1;
-    BOOL keep_alive :1;
+typedef union {
+    struct {
+    	BOOL status :1;
+        BOOL active_devices :1;
+        BOOL keep_alive :1;
+    } bits;
+    BYTE all;
 } master_waiting;
 
 #define KA_RECEIVE_MAX      500     // 5 s = keep-alive receive timeout

@@ -31,6 +31,9 @@ void USARTInit(void)
 	RCSTAbits.RX9	= 1;  // 9-bit receiving
 	RCSTAbits.CREN	= 0;  // disable RX (enabled by transistor)
 	TXSTAbits.TXEN	= 1;  // enable TX
+    
+    IPR1bits.RCIP   = 1;  // receive interrupt high priority
+    PIE1bits.RCIE   = 0;  // enable read interrupt    
 }
 
 // Write byte to USART
