@@ -23,12 +23,12 @@ void USARTInit(void)
 	
 	XPRESSNET_DIR = XPRESSNET_IN;		// switch bus for read
 	
+    WPUBbits.WPUB5 = 1;   // enable pull-up on read pin
+    
 	TXSTAbits.SYNC	= 0;  // enable async mode
 	RCSTAbits.SPEN	= 1;  // enable async mode
 	TXSTAbits.TX9	= 1;  // 9-bit sending
 	RCSTAbits.RX9	= 1;  // 9-bit receiving
-	//RCSTAbits.ADDEN = 1;  // enable address detection
-						  // TX interrupt must be in high level (otherwise will not match 80 us window)
 	RCSTAbits.CREN	= 0;  // disable RX (enabled by transistor)
 	TXSTAbits.TXEN	= 1;  // enable TX
 }

@@ -412,6 +412,9 @@ void user_init(void)
 	ANSEL = 0x00;
 	ANSELH = 0x00;
 
+    // enable PORTA and PORTB pull-ups (bacause of USART reading)
+    INTCON2bits.RABPU = 0;
+    
 	// Initialize all of the LED pins
 	mInitAllLEDs();
 	mLED_Pwr_On();
