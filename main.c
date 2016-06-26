@@ -609,6 +609,10 @@ void USART_receive(void)
         if (!((active_devices >> current_dev.index) & 0b1)) {
             active_devices |= ((UINT32)1 << current_dev.index);
             master_send_waiting.active_devices = TRUE;
+            // send info about connected device BEFORE actual data
+        	if (last_start == ring_USART_datain.ptr_e) {
+            	last_start = (last_start + check_device_data_to_USB()) & ring_USART_datain.max;
+            }            
         }
         dirty_devices &= ~((UINT32)1 << current_dev.index);
     #endif
