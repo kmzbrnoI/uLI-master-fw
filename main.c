@@ -1045,7 +1045,7 @@ void check_device_data_to_USB(void)
 		ringAddByte((ring_generic*)&ring_USART_datain, 0xA0);
 		ringAddByte((ring_generic*)&ring_USART_datain, 0x11);
 		ringAddByte((ring_generic*)&ring_USART_datain, tmp);
-		ringAddByte((ring_generic*)&ring_USART_datain, 0xB1 ^ tmp);
+		ringAddByte((ring_generic*)&ring_USART_datain, 0x11 ^ tmp);
 		return 4;
 	} else if (master_send_waiting.bits.active_devices) {
         if (ringFreeSpace(ring_USART_datain) < 8) return;
