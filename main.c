@@ -1041,7 +1041,7 @@ void check_device_data_to_USB(void)
 	if (master_send_waiting.bits.status) {
 		if (ringFreeSpace(ring_USART_datain) < 4) return;
 		master_send_waiting.bits.status = FALSE;
-        tmp = 0xA0 + mPwrControl + (sense_hist.state << 1) + (keep_alive.receive << 2) + (keep_alive.send << 3);
+        tmp = 0xA0 + mPwrControl + (sense_hist.state << 1) + ((keep_alive.receive &0b1) << 2) + ((keep_alive.send & 0b1) << 3);
 		ringAddByte((ring_generic*)&ring_USART_datain, 0xA0);
 		ringAddByte((ring_generic*)&ring_USART_datain, 0x11);
 		ringAddByte((ring_generic*)&ring_USART_datain, tmp);
