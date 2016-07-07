@@ -59,10 +59,7 @@ is XOR of *Header byte, Data byte 1 .. Data byte n*.
 | Call byte | Header byte | Data byte 1 | Data 2 | Data 3 | Data 4 |                 Meaning                  |
 |-----------|-------------|-------------|--------|--------|--------|------------------------------------------|
 | 0xA0      | 0x01        | 0x05        | XOR    | -      | -      | Keep-alive                               |
-| 0xA0      | 0x11        | 0xA 0bNR0T  | XOR    | -      | -      | Set master status                        |
-                                                                     T = transistor,
-                                                                     R = keep-alive receiving,
-                                                                     N = keep-alive sending                   |
+| 0xA0      | 0x11        | 0xA 0bNR0T  | XOR    | -      | -      | Set master status (T = transistor, R = keep-alive receiving, N = keep-alive sending) |
 | 0xA0      | 0x11        | 0xA2        | XOR    | -      | -      | Master`s status request                  |
 | 0xA0      | 0x11        | 0x80        | XOR    | -      | -      | Master`s version request                 |
 | 0xA0      | 0x11        | 0x81        | XOR    | -      | -      | Response request                         |
