@@ -664,7 +664,7 @@ void USART_receive_interrupt(void)
                 USART_last_start = ring_USART_datain.ptr_e;
             }
         #else
-            last_start = ring_USART_datain.ptr_e;
+            USART_last_start = ring_USART_datain.ptr_e;
         #endif
         
 		// whole message received -> wait a few microseconds and send next data
