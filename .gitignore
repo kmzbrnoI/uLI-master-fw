@@ -38,3 +38,6 @@ uLI-master.X/nbproject/*.mk
 uLI-master.X/nbproject/*.properties
 uLI-master.X/nbproject/*.bash
 uLI-master.X/nbproject/private
+uLI-master.X/build
+uLI-master.X/dist
+uLI-master.X/debug
