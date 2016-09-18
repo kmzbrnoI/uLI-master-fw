@@ -15,9 +15,6 @@
 #define ROUND_MAX          5
 #define ROUND_RACK         4    // 4. round is round when RACK is sent to active devices
 
-#undef DEBUG
-#define RACK_ENABLE
-
 // device currently being adressed by master
 typedef struct {
 	BYTE index;				// requested device index
