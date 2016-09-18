@@ -9,7 +9,7 @@
 
 #include "GenericTypeDefs.h"
 
-#define VERSION_HW		0x40
+#define VERSION_HW		0x42
 #define VERSION_SW		0x10
 
 #define ROUND_MAX          5
