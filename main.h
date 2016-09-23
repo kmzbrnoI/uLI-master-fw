@@ -10,7 +10,7 @@
 #include "GenericTypeDefs.h"
 
 #define VERSION_HW		0x42
-#define VERSION_SW		0x10
+#define VERSION_SW		0x11
 
 #define ROUND_MAX          5
 #define ROUND_RACK         4    // 4. round is round when RACK is sent to active devices

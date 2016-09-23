@@ -93,6 +93,8 @@
 #define PWR_LED_LONG_COUNT				  40		// 400 ms
 #define PWR_LED_FERR_COUNT				  10		// status led indicates >10 framing errors
 
+#define TIMEOUT_ERR_TIMEOUT               20        // 200 ms
+
 /** V A R I A B L E S ********************************************************/
 #pragma udata
 char USB_Out_Buffer[32];
@@ -145,6 +147,8 @@ volatile BYTE pwr_led_status = 2;
 
 volatile port_history sense_hist = {0, 0};
 volatile master_waiting master_send_waiting = {0};
+
+volatile BYTE timeout_err_counter = TIMEOUT_ERR_TIMEOUT;
 
 /** P R I V A T E  P R O T O T Y P E S ***************************************/
 void YourHighPriorityISRCode();
@@ -331,6 +335,8 @@ void USART_send(void);
 					sense_hist.timeout = 0;
 				}
 
+                if (timeout_err_counter < TIMEOUT_ERR_TIMEOUT) { timeout_err_counter++; }
+                
 				// end of 10 ms counter
 			}
 
@@ -580,9 +586,9 @@ BYTE calc_xor(BYTE* data, BYTE len)
 /* RECEIVING DATA FROM XPRESSNET DEVICES
  * This function should be periodiccaly called, timinig is not very critical
  * (as the input FIFO is not full). This function eats data from USART FIFO
- * and puts it into internal ring buffer. After signle message is received,
- * some time it let to device to switch directions and next normal inquiery is
- * transfered.
+ * and puts it into internal ring buffer. After single message is received,
+ * some time it let for device to switch direction and next normal inquiry is
+ * transferred.
  */
 
 void USART_check_timeouts(void)
@@ -595,8 +601,11 @@ void USART_check_timeouts(void)
 		if (ring_USART_datain.ptr_e == ring_USART_datain.ptr_b) ring_USART_datain.empty = TRUE;
 		usart_timeout = 0;
 
-		// inform PC about timeout        
-		USB_send_master_data(0x01, 0x02, 0x03);
+		// inform PC about timeout
+        if (timeout_err_counter == TIMEOUT_ERR_TIMEOUT) {
+            timeout_err_counter = 0;
+            USB_send_master_data(0x01, 0x02, 0x03);            
+        }
 
 		// send next message to XpressNET
         USART_send_next_frame();
