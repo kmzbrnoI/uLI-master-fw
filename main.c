@@ -153,7 +153,7 @@ volatile master_waiting master_send_waiting = { 0 };
 
 volatile BYTE timeout_err_counter = TIMEOUT_ERR_TIMEOUT;
 
-/** PRIVATE  PROTOTYPES *******************************************************/
+/** PRIVATE PROTOTYPES ********************************************************/
 
 void YourHighPriorityISRCode();
 void YourLowPriorityISRCode();
@@ -161,7 +161,6 @@ void YourLowPriorityISRCode();
 // general functions
 void user_init(void);
 void initialize_system(void);
-BYTE calc_xor(BYTE* data, BYTE len);
 void init_devices(void);
 BYTE calc_parity(BYTE data);
 void check_device_data_to_USB(void);
@@ -363,7 +362,7 @@ void main(void) {
 		}
 #endif
 
-		// Normal inquiery answer timeout.
+		// Normal inquiry answer timeout.
 		// This function is not placed in interrupt to serve interrupt as
 		// fast as possible.
 		if ((current_dev.timeout >= NI_TIMEOUT) && (mPwrControl) && (sense_hist.state)) {
@@ -557,21 +556,11 @@ BOOL USER_USB_CALLBACK_EVENT_HANDLER(USB_EVENT event, void* pdata, WORD size) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-
-BYTE calc_xor(BYTE* data, BYTE len) {
-	int xor = 0, i;
-	for (i = 0; i < len; i++)
-		xor ^= data[i];
-	return xor;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-/* RECEIVING DATA FROM XPRESSNET DEVICES
- * This function should be periodiccaly called, timinig is not very critical
- * (as the input FIFO is not full). This function eats data from USART FIFO
- * and puts it into internal ring buffer. After single message is received,
- * some time it let for device to switch direction and next normal inquiry is
- * transferred.
+/* CHECKING USART IN TIMEOUT
+ * This function is called in main loop, timing is not very critical.
+ * It checks for timeouts from XpressNET devices. For example, when device sends
+ * only part of the message, this timeout ensures clearing of master`s buffers
+ * with unfinished message.
  */
 
 void USART_check_timeouts(void) {
@@ -595,6 +584,13 @@ void USART_check_timeouts(void) {
 		return;
 	}
 }
+
+////////////////////////////////////////////////////////////////////////////////
+/* RECEIVING DATA FROM XPRESSNET DEVICES
+ * This function is called in high-priority interrupt, be careful about
+ * interferences with main code!
+ * This function must be as fast as possible!
+ */
 
 void USART_receive_interrupt(void) {
 	// We do not check xor in this function intentionally.
@@ -853,7 +849,6 @@ void parse_command_for_master(BYTE start, BYTE len) {
 
 void USART_send_next_frame(void) {
 	BYTE ring_length = ringDistance(ring_USB_datain, ring_USB_datain.ptr_b, ring_USB_datain.ptr_e);
-	//RCSTAbits.CREN	= 0;	// disable RX
 
 	// check if there is a message from PC to be sent to XpressNET
 	if ((ring_length >= 3) && (ring_length >= msg_len(ring_USB_datain, ring_USB_datain.ptr_b))) {
