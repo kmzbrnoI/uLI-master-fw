@@ -56,6 +56,15 @@ is being received from PC.
 ### Status LED (yellow)
 - 2 blinks = normal operations
 
+## `RACK_ENABLE`
+
+When code is compiled with `RACK_ENABLE` defined, uLI-master will periodically
+ask devices to respond via *Request for Acknowledgement* command. uLI-mastter
+uses this command to keep list of active XpressNET devices. Changes in active
+devices list are reported to PC, see protocol.
+
+Without this macro, this feature is disabled.
+
 ## Protocols
 
  * On XpressNET side, Master uses standard XpressNET protocol.
