@@ -400,8 +400,13 @@ void main(void) {
 		USART_check_timeouts();
 		CDCTxService();
 
-		if ((master_send_waiting.all) && (USART_last_start == ring_USART_datain.ptr_e)) {
-			// data are not being received -> check output buffers
+		if ((master_send_waiting.all) && (USART_last_start == ring_USART_datain.ptr_e)
+		    && (!current_dev.reacted)) {
+			// Data are not being received -> check output buffers.
+			/* The `reacted` part of if is important -- it ensures this part
+			 * of code is not called in case of potential interrupt in next few
+			 * microseconds. This is important for check_device_data_to_USB func.
+			 */
 			check_device_data_to_USB();
 			USART_last_start = ring_USART_datain.ptr_e;
 		}
@@ -580,8 +585,6 @@ void USART_check_timeouts(void) {
 
 		// send next message to XpressNET
 		USART_send_next_frame();
-
-		return;
 	}
 }
 
@@ -845,6 +848,9 @@ void parse_command_for_master(BYTE start, BYTE len) {
  * This function checks if message is present in USB->USART buffer. If yes,
  * the mesasge is sent to device. Otherwise, next device is requested with
  * normal inquiry.
+ * This function must be called from main loop. We must ensure that this
+ * function is not called when data are received, but not yet parsed. Otherwise,
+ * it could send out data intended for uLI-master!
  */
 
 void USART_send_next_frame(void) {
@@ -1006,45 +1012,63 @@ BOOL USB_send_master_data(BYTE first, BYTE second, BYTE third) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// This function is called periodically when to data are being received
-// to USART_input buffer.
-// This function returns number of bytes added to buffer.
+/* This function is called periodically when no data are being received
+ * to USART_input buffer.
+ * Notice: this function must move ring_USART_datain.ptr_e before actually
+ * adding data to ring_USART_datain or make addition of ALL data to buffer
+ * atomic at once. Because at every time, this functon could be interrupted
+ * by USART_receive_interrupt function, which also uses ring_USART_datain buffer.
+ * It is important to keep these two functions in symbiosis.
+ * Reality: when interrupt comes between lines `my_start = ...` and the next line,
+ * there will be a huge problem. We cannot solve this problem simply. So, when
+ * this function is called, it is 99.9999 % sure that this function will NOT
+ * be interrupted. To increase the probability, this function should be as
+ * fast as possible.
+ */
 
 void check_device_data_to_USB(void) {
-	BYTE tmp;
+	BYTE tmp, my_start;
 
 	if (master_send_waiting.bits.status) {
 		if (ringFreeSpace(ring_USART_datain) < 4) return;
 		master_send_waiting.bits.status = FALSE;
+		my_start = ring_USART_datain.ptr_e;
+		ring_USART_datain.ptr_e = (ring_USART_datain.ptr_e + 4) & ring_USART_datain.max;
+
 		tmp = 0xA0 + mPwrControl + (sense_hist.state << 1) + ((keep_alive.receive & 0b1) << 2) + ((keep_alive.send & 0b1) << 3);
-		ringAddByte((ring_generic*)&ring_USART_datain, 0xA0);
-		ringAddByte((ring_generic*)&ring_USART_datain, 0x11);
-		ringAddByte((ring_generic*)&ring_USART_datain, tmp);
-		ringAddByte((ring_generic*)&ring_USART_datain, 0x11 ^ tmp);
-		return 4;
+		ring_USART_datain.data[my_start] = 0xA0;
+		ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = 0x11;
+		ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = tmp;
+		ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = 0x11 ^ tmp;
+
 	} else if (master_send_waiting.bits.active_devices) {
 		if (ringFreeSpace(ring_USART_datain) < 8) return;
 		master_send_waiting.bits.active_devices = FALSE;
+		my_start = ring_USART_datain.ptr_e;
+		ring_USART_datain.ptr_e = (ring_USART_datain.ptr_e + 8) & ring_USART_datain.max;
 
-		ringAddByte((ring_generic*)&ring_USART_datain, 0xA0);
-		ringAddByte((ring_generic*)&ring_USART_datain, 0x15);
-		ringAddByte((ring_generic*)&ring_USART_datain, 0x82);
-		ringAddByte((ring_generic*)&ring_USART_datain, active_devices >> 24);
-		ringAddByte((ring_generic*)&ring_USART_datain, (active_devices >> 16) & 0xFF);
-		ringAddByte((ring_generic*)&ring_USART_datain, (active_devices >> 8) & 0xFF);
-		ringAddByte((ring_generic*)&ring_USART_datain, active_devices & 0xFF);
+		ring_USART_datain.data[my_start] = 0xA0;
+		ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = 0x15;
+		ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = 0x82;
+		ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = active_devices >> 24;
+		ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = (active_devices >> 16) & 0xFF;
+		ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = (active_devices >> 8) & 0xFF;
+		ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = active_devices & 0xFF;
 
-		ringAddByte((ring_generic*)&ring_USART_datain, 0x97 ^ (active_devices >> 24)
-		        ^ ((active_devices >> 16) & 0xFF) ^ (active_devices >> 8) & 0xFF ^ (active_devices & 0xFF));
+		ring_USART_datain.data[(++my_start) & ring_USART_datain.max] =  0x97 ^
+			(active_devices >> 24)  ^ ((active_devices >> 16) & 0xFF) ^
+			(active_devices >> 8) & 0xFF ^ (active_devices & 0xFF);
 
-		return 8;
 	} else if (master_send_waiting.bits.keep_alive) {
 		if (ringFreeSpace(ring_USART_datain) < 4) return;
 		master_send_waiting.bits.keep_alive = FALSE;
-		ringAddByte((ring_generic*)&ring_USART_datain, 0xA0);
-		ringAddByte((ring_generic*)&ring_USART_datain, 0x01);
-		ringAddByte((ring_generic*)&ring_USART_datain, 0x05);
-		ringAddByte((ring_generic*)&ring_USART_datain, 0x04);
+		my_start = ring_USART_datain.ptr_e;
+		ring_USART_datain.ptr_e = (ring_USART_datain.ptr_e + 4) & ring_USART_datain.max;
+
+		ring_USART_datain.data[my_start] = 0xA0;
+		ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = 0x01;
+		ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = 0x05;
+		ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = 0x04;
 	}
 }
 
