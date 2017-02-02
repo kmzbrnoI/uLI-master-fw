@@ -572,10 +572,15 @@ void USART_check_timeouts(void) {
 	// check for timeout
 	if (((USART_last_start != ring_USART_datain.ptr_e) || (current_dev.reacted))
 	    && (usart_timeout >= USART_MAX_TIMEOUT)) {
+		
+		// disable receive interrupt, so it does not interfere with this function
+		PIE1bits.RCIE = 0;
+		
 		// delete last incoming message and wait for next message
 		ring_USART_datain.ptr_e = USART_last_start;
 		if (ring_USART_datain.ptr_e == ring_USART_datain.ptr_b) ring_USART_datain.empty = TRUE;
 		usart_timeout = 0;
+		current_dev.reacted = FALSE;		
 
 		// inform PC about timeout
 		if (timeout_err_counter == TIMEOUT_ERR_TIMEOUT) {
@@ -985,13 +990,12 @@ BYTE calc_parity(BYTE data) {
 
 /* This callback is called after normal inquiry is sent.
  * WARNING: this function is called in high-priority interrupt
- * It could aanyhow interleave low-priority interrupt (especially the part
+ * It could anyhow interleave low-priority interrupt (especially the part
  * working with current_dev.timeout = 0) !!
  */
 void USART_ni_sent(void) {
-	XPRESSNET_DIR = XPRESSNET_IN;
-	current_dev.timeout = 1;
-	if (current_dev.reacted) { current_dev.timeout = 0; } // yes, this code has its meaning
+	// device may react before this function is called
+	current_dev.timeout = current_dev.reacted ? 0 : 1;
 	sent_callback = NULL;
 }
 
