@@ -10,7 +10,7 @@
 #include "GenericTypeDefs.h"
 
 #define VERSION_HW      0x42
-#define VERSION_SW      0x13
+#define VERSION_SW      0x14
 
 #define ROUND_MAX       5
 #define ROUND_RACK      4 // 4. round is round when RACK is sent to active devices
@@ -21,6 +21,7 @@ typedef struct {
 	BYTE timeout; // after timeout is too big, next device is picked
 	BOOL reacted; // if the device has reacted to normal inquiry
 	BYTE round;   // current round
+    BOOL finished;// whether the whole message was received
 } current;
 
 #define PORT_TIMEOUT 10 // 100 ms to consider port changed (yes, really, it is power)

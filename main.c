@@ -571,7 +571,10 @@ BOOL USER_USB_CALLBACK_EVENT_HANDLER(USB_EVENT event, void* pdata, WORD size) {
 void USART_check_timeouts(void) {
 	// check for timeout
 	if (((USART_last_start != ring_USART_datain.ptr_e) || (current_dev.reacted))
-	    && (usart_timeout >= USART_MAX_TIMEOUT)) {
+	    && (usart_timeout >= USART_MAX_TIMEOUT) && (!current_dev.finished)) {
+		
+		// the (!current_dev.finished) condition guarantees us this if will
+		// not be entered after the message was received
 		
 		// disable receive interrupt, so it does not interfere with this function
 		PIE1bits.RCIE = 0;
@@ -608,6 +611,17 @@ void USART_receive_interrupt(void) {
 	BYTE tmp, parity;
 
 	usart_timeout = 0;
+	
+	received = USARTReadByte();
+	
+	if (current_dev.finished) {
+		// next byte was received after the end of message -> probably
+		// bad length -> increase timeout to let the device transfer
+		// all the data
+		current_dev.timeout = NI_TIMEOUT / 2;
+		return;
+	}
+	
 	current_dev.reacted = TRUE;
 	current_dev.timeout = 0;
 
@@ -618,8 +632,6 @@ void USART_receive_interrupt(void) {
 	}
 	dirty_devices &= ~((UINT32)1 << current_dev.index);
 #endif
-
-	received = USARTReadByte();
 
 	if (ringFreeSpace(ring_USART_datain) < 2) {
 		// reset buffer and wait for next message
@@ -661,7 +673,9 @@ void USART_receive_interrupt(void) {
 		USART_last_start = ring_USART_datain.ptr_e;
 #endif
 
-		// whole message received -> wait a few microseconds and send next data
+		current_dev.finished = TRUE;
+
+		// whole message received -> wait a few microseconds and send next data		
 		current_dev.timeout = NI_TIMEOUT / 2;
 	}
 
@@ -866,6 +880,8 @@ void USART_send_next_frame(void) {
 		// yes -> send the message
 		usart_to_send = (ring_USB_datain.ptr_b + 1) & ring_USB_datain.max;
 		XPRESSNET_DIR = XPRESSNET_OUT;
+		current_dev.reacted = FALSE; // we do not want USART timeout to overflow
+		current_dev.finished = FALSE;
 		sent_callback = &(USART_send_rest_of_message);
 		usart_last_byte_sent = 0;
 		USARTWriteByte(1, ring_USB_datain.data[ring_USB_datain.ptr_b]);
@@ -941,6 +957,7 @@ void USART_request_next_device(void) {
 	PIE1bits.RCIE = 1;
 	current_dev.timeout = 0;
 	current_dev.reacted = FALSE;
+	current_dev.finished = FALSE;
 	XPRESSNET_DIR = XPRESSNET_OUT;
 	sent_callback = &(USART_ni_sent);
 	PIE1bits.TXIE = 0;
@@ -995,7 +1012,9 @@ BYTE calc_parity(BYTE data) {
  */
 void USART_ni_sent(void) {
 	// device may react before this function is called
-	current_dev.timeout = current_dev.reacted ? 0 : 1;
+	// do not replace this if with ternary operator, it does not behave well
+	current_dev.timeout = 1;
+	if (current_dev.reacted) current_dev.timeout = 0;
 	sent_callback = NULL;
 }
 
