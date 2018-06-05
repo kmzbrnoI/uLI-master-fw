@@ -35,7 +35,7 @@
 // CONFIG2L                     //
 #pragma config PWRTEN = ON      // Power-up Timer Enable bit (PWRT enabled)
 #pragma config BOREN = SBORDIS  // Brown-out Reset Enable bits (Brown-out Reset enabled in hardware only (SBOREN is disabled))
-#pragma config BORV = 27        // Brown-out Reset Voltage bits (VBOR set to 2.7 V nominal)
+#pragma config BORV = 30        // Brown-out Reset Voltage bits (VBOR set to 3.0 V nominal)
                                 //
 // CONFIG2H                     //
 #pragma config WDTEN = ON       // Watchdog Timer Enable bit (WDT is enabled)
