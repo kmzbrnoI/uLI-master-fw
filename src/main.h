@@ -9,7 +9,9 @@
 
 #include <stdbool.h>
 
-#define VERSION_HW      0x42
+extern uint8_t version_hw;
+#define VERSION_HW_OLD  0x42
+#define VERSION_HW_5    0x50
 #define VERSION_SW      0x15
 
 #define ROUND_MAX       5

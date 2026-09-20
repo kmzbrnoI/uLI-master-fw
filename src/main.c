@@ -54,6 +54,7 @@
 #pragma udata
 
 uint8_t USB_Out_Buffer[32];
+uint8_t version_hw;
 
 // USB -> USART ring buffer
 volatile ring_generic ring_USB_datain;
@@ -111,6 +112,7 @@ void init_devices(void);
 uint8_t calc_parity(uint8_t data);
 void check_device_data_to_USB(void);
 void timer_10ms(void);
+static uint8_t detect_hw_version(void);
 
 // USB functions
 void USB_send(void);
@@ -761,7 +763,7 @@ void parse_command_for_master(uint8_t start, uint8_t len) {
 			USB_Out_Buffer[0] = 0xA0;
 			USB_Out_Buffer[1] = 0x13;
 			USB_Out_Buffer[2] = 0x80;
-			USB_Out_Buffer[3] = VERSION_HW;
+			USB_Out_Buffer[3] = version_hw;
 			USB_Out_Buffer[4] = VERSION_SW;
 			USB_Out_Buffer[5] = USB_Out_Buffer[1] ^ USB_Out_Buffer[2] ^ USB_Out_Buffer[3] ^ USB_Out_Buffer[4];
 			putUSBUSART(USB_Out_Buffer, 6);
@@ -1015,6 +1017,19 @@ void check_device_data_to_USB(void) {
 		ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = 0x05;
 		ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = 0x04;
 	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+uint8_t detect_hw_version(void) {
+	// HW v5.0 contains pull-down on IO_HW_VERSION pin
+	// In HW <v5.0 the pin is floating
+	IO_OUT(IO_HW_VERSION_TRIS, IO_HW_VERSION_MASK);
+	IO_HW_VERSION_PORT = 1;
+	IO_IN(IO_HW_VERSION_TRIS, IO_HW_VERSION_MASK);
+	NOP();
+	NOP();
+	return IO_HW_VERSION_PORT ? VERSION_HW_OLD : VERSION_HW_5;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
