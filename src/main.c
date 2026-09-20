@@ -560,22 +560,26 @@ void USB_send(void) {
 
 ////////////////////////////////////////////////////////////////////////////////
 /* Receive data from USB and add it to ring_USB_datain.
+ * Index of start of last message is in
+ * WARNING! This function cannot rely on ring_USB_datain.ptr_b value!
+ * ring_USB_datain.ptr_b could be changed in interrupt called at any time!
+ * More specifically, USART_receive_interrupt could add data at beginning of
+ * the USB buffer. It is necessary to keep this information always in mind.
  */
 
 void USB_receive(void) {
 	static uint8_t last_start = 0;
-	uint8_t xor, i;
-	uint8_t received_len;
-	bool parity;
 
-	if ((USBDeviceState < CONFIGURED_STATE) || (USBSuspendControl)) return;
+    if ((USBDeviceState != CONFIGURED_STATE) || (USBIsDeviceSuspended()))
+        return;
 
 	if (mUSBUSARTIsTxTrfReady()) {
 		// ring_USB_datain overflow check
 		if (ringFull(ring_USB_datain)) {
 			// delete last message
 			ring_USB_datain.ptr_e = last_start;
-			if (ring_USB_datain.ptr_b == ring_USB_datain.ptr_e) ring_USART_datain.empty = true;
+			if (ring_USB_datain.ptr_b == ring_USB_datain.ptr_e)
+                ring_USART_datain.empty = true;
 
 			// inform PC about full buffer
 			USB_send_master_data(0x01, 0x06, 0x07);
@@ -583,7 +587,7 @@ void USB_receive(void) {
 			return;
 		}
 
-		received_len = getsUSBUSART((ring_generic*)&ring_USB_datain, ringFreeSpace(ring_USB_datain));
+		uint8_t received_len = getsUSBUSART((ring_generic*)&ring_USB_datain, ringFreeSpace(ring_USB_datain));
 		if (received_len == 0) {
 			// check for timeout
 			if ((usb_timeout >= USB_MAX_TIMEOUT) && (last_start != ring_USB_datain.ptr_e)) {
@@ -608,7 +612,8 @@ void USB_receive(void) {
 			// while message received
 
 			// check for parity
-			for (i = 0, parity = 0; i < 8; i++)
+            bool parity = false;
+			for (uint8_t i = 0; i < 8; i++)
 				if ((ring_USB_datain.data[last_start] >> i) & 1)
 					parity = !parity;
 
@@ -619,11 +624,12 @@ void USB_receive(void) {
 				return;
 			}
 
-			// check for xor
-			for (i = 0, xor = 0; i < msg_len(ring_USB_datain, last_start) - 2; i++)
+			// check xor
+            uint8_t xor = 0;
+			for (uint8_t i = 0; i < msg_len(ring_USB_datain, last_start) - 1; i++)
 				xor ^= ring_USB_datain.data[(i + last_start + 1) & ring_USB_datain.max];
 
-			if (xor != ring_USB_datain.data[(i + last_start + 1) & ring_USB_datain.max]) {
+			if (xor != 0) {
 				// xor error
 				// delete content in the middle of ring buffer
 				ringRemoveFromMiddle((ring_generic*)&ring_USB_datain, last_start, msg_len(ring_USB_datain, last_start));
