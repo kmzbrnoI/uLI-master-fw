@@ -74,9 +74,6 @@ volatile uint8_t usb_timeout = 0;
 volatile uint16_t usart_timeout = 0;
 volatile uint8_t USART_last_start = 0;
 
-// 10 ms timer counter
-volatile uint16_t ten_ms_counter = 0;
-
 // callback being called after byte is sent to USART
 void (*volatile sent_callback)(void) = NULL;
 
@@ -108,21 +105,17 @@ volatile uint8_t timeout_err_counter = TIMEOUT_ERR_TIMEOUT;
 
 /** PRIVATE PROTOTYPES ********************************************************/
 
-void YourHighPriorityISRCode();
-void YourLowPriorityISRCode();
-
-// general functions
 void user_init(void);
 void initialize_system(void);
 void init_devices(void);
 uint8_t calc_parity(uint8_t data);
 void check_device_data_to_USB(void);
+void timer_10ms(void);
 
 // USB functions
 void USB_send(void);
 void USB_receive(void);
 void dump_buf_to_USB(ring_generic* buf);
-void USBDeviceTasks(void);
 void parse_command_for_master(uint8_t start, uint8_t len);
 bool USB_send_master_data(uint8_t first, uint8_t second, uint8_t third);
 void USB_buffer_status(void);
@@ -149,16 +142,20 @@ void __interrupt(high_priority) high_isr(void) {
 }
 
 void __interrupt(low_priority) low_isr(void) {
-	// Timer2 on 10 us
+  	static volatile uint16_t ten_ms_counter = 0;
+
 	if ((PIE1bits.TMR2IE) && (PIR1bits.TMR2IF)) {
+    	// Timer2 on 10 us
 
 		// USART currently requested device timeout
-		if ((current_dev.timeout > 0) && (current_dev.timeout < NI_TIMEOUT)) { current_dev.timeout++; }
+		if ((current_dev.timeout > 0) && (current_dev.timeout < NI_TIMEOUT))
+            current_dev.timeout++;
 
 		// XpressNET direction is turned to "IN" as soon as possible after
 		// last byte was sent to XpressNET.
 		// This is done independently on any callbacks. This needs to be done really fast!
-		if ((usart_last_byte_sent) && (TXSTAbits.TRMT)) { XPRESSNET_DIR = XPRESSNET_IN; }
+		if ((usart_last_byte_sent) && (TXSTAbits.TRMT))
+            XPRESSNET_DIR = XPRESSNET_IN;
 
 		// Detection of USART device answering normal inquiry.
 		if ((!BAUDCONbits.RCIDL) && (!current_dev.reacted) && (XPRESSNET_DIR == XPRESSNET_IN)) {
@@ -169,95 +166,13 @@ void __interrupt(low_priority) low_isr(void) {
 		}
 
 		// usart receive timeout
-		if (usart_timeout < USART_MAX_TIMEOUT) usart_timeout++;
+		if (usart_timeout < USART_MAX_TIMEOUT)
+            usart_timeout++;
 
-		if (ten_ms_counter < 1000) {
-			ten_ms_counter++;
-		} else {
+        ten_ms_counter++;
+		if (ten_ms_counter >= 1000) {
 			ten_ms_counter = 0;
-
-			// 10 ms overflow:
-
-			// usb receive timeout
-			if (usb_timeout < USB_MAX_TIMEOUT) usb_timeout++;
-
-			// keep-alive
-			if ((keep_alive.send) && (keep_alive.send_timer < KA_SEND_INTERVAL)) {
-				keep_alive.send_timer++;
-				if (keep_alive.send_timer == KA_SEND_INTERVAL) {
-					keep_alive.send_timer = 0;
-					master_send_waiting.bits.keep_alive = true;
-				}
-			}
-
-			if ((keep_alive.receive) && (keep_alive.receive_timer < KA_RECEIVE_MAX)) {
-				keep_alive.receive_timer++;
-				if (keep_alive.receive_timer == KA_RECEIVE_MAX) {
-					// computer crashed -> turn the bus off
-                    XN_Pwr_Off();
-					RESET_BUS;
-					keep_alive.receive_timer = 0;
-					keep_alive.receive = false;
-					master_send_waiting.bits.status = true;
-				}
-			}
-
-#ifndef DEBUG
-			// mLEDIn timeout
-			if (mLED_In_Timeout < 2 * MLED_IN_MAX_TIMEOUT) {
-				mLED_In_Timeout++;
-				if (mLED_In_Timeout == MLED_IN_MAX_TIMEOUT) {
-					mLED_In_On();
-				}
-			}
-
-			// mLEDOut timeout
-			if ((mLED_Out_Timeout < 2 * MLED_OUT_MAX_TIMEOUT) && (usb_configured)) {
-				mLED_Out_Timeout++;
-				if (mLED_Out_Timeout == MLED_OUT_MAX_TIMEOUT) {
-					mLED_Out_Off();
-				}
-			}
-#endif
-
-			// pwrLED toggling
-			pwr_led_base_counter++;
-			if (pwr_led_base_counter >= pwr_led_base_timeout) {
-				pwr_led_base_counter = 0;
-				pwr_led_status_counter++;
-
-				if (pwr_led_status_counter == 2 * pwr_led_status) {
-					// wait between cycles
-					pwr_led_base_timeout = PWR_LED_LONG_COUNT;
-					mLED_Pwr_Off();
-				} else if (pwr_led_status_counter > 2 * pwr_led_status) {
-					// new base cycle
-					pwr_led_base_timeout = PWR_LED_SHORT_COUNT;
-					pwr_led_status_counter = 0;
-					mLED_Pwr_On();
-				} else {
-					mLED_Pwr_Toggle();
-				}
-			}
-
-			// sense history
-			if (sense_hist.state != mSense) {
-				if (sense_hist.timeout < PORT_TIMEOUT) {
-					sense_hist.timeout++;
-					if (sense_hist.timeout >= PORT_TIMEOUT) {
-						sense_hist.state = mSense;
-						if (!mSense) { RESET_BUS; }
-						sense_hist.timeout = 0;
-						master_send_waiting.bits.status = true;
-					}
-				}
-			} else {
-				sense_hist.timeout = 0;
-			}
-
-			if (timeout_err_counter < TIMEOUT_ERR_TIMEOUT) { timeout_err_counter++; }
-
-			// end of 10 ms counter
+            timer_10ms();
 		}
 
 		PIR1bits.TMR2IF = 0; // reset overflow flag
@@ -324,8 +239,8 @@ void main(void) {
 		
 		// clear watchdog timer
 		ClrWdt();
-	} //end while
-} //end main
+	}
+}
 
 void initialize_system(void) {
 	ADCON1 = 0x0F;
@@ -378,6 +293,89 @@ void user_init(void) {
 	                       // interrupt is fired on port change
 
 	T2CONbits.TMR2ON = 1; // enable timer2
+}
+
+void timer_10ms(void) {
+    // usb receive timeout
+    if (usb_timeout < USB_MAX_TIMEOUT)
+        usb_timeout++;
+
+    // keep-alive
+    if ((keep_alive.send) && (keep_alive.send_timer < KA_SEND_INTERVAL)) {
+        keep_alive.send_timer++;
+        if (keep_alive.send_timer == KA_SEND_INTERVAL) {
+            keep_alive.send_timer = 0;
+            master_send_waiting.bits.keep_alive = true;
+        }
+    }
+
+    if ((keep_alive.receive) && (keep_alive.receive_timer < KA_RECEIVE_MAX)) {
+        keep_alive.receive_timer++;
+        if (keep_alive.receive_timer == KA_RECEIVE_MAX) {
+            // computer crashed -> turn the bus off
+            XN_Pwr_Off();
+            RESET_BUS;
+            keep_alive.receive_timer = 0;
+            keep_alive.receive = false;
+            master_send_waiting.bits.status = true;
+        }
+    }
+
+#ifndef DEBUG
+    // mLEDIn timeout
+    if (mLED_In_Timeout < 2 * MLED_IN_MAX_TIMEOUT) {
+        mLED_In_Timeout++;
+        if (mLED_In_Timeout == MLED_IN_MAX_TIMEOUT) {
+            mLED_In_On();
+        }
+    }
+
+    // mLEDOut timeout
+    if ((mLED_Out_Timeout < 2 * MLED_OUT_MAX_TIMEOUT) && (usb_configured)) {
+        mLED_Out_Timeout++;
+        if (mLED_Out_Timeout == MLED_OUT_MAX_TIMEOUT) {
+            mLED_Out_Off();
+        }
+    }
+#endif
+
+    // pwrLED toggling
+    pwr_led_base_counter++;
+    if (pwr_led_base_counter >= pwr_led_base_timeout) {
+        pwr_led_base_counter = 0;
+        pwr_led_status_counter++;
+
+        if (pwr_led_status_counter == 2 * pwr_led_status) {
+            // wait between cycles
+            pwr_led_base_timeout = PWR_LED_LONG_COUNT;
+            mLED_Pwr_Off();
+        } else if (pwr_led_status_counter > 2 * pwr_led_status) {
+            // new base cycle
+            pwr_led_base_timeout = PWR_LED_SHORT_COUNT;
+            pwr_led_status_counter = 0;
+            mLED_Pwr_On();
+        } else {
+            mLED_Pwr_Toggle();
+        }
+    }
+
+    // sense history
+    if (sense_hist.state != mSense) {
+        if (sense_hist.timeout < PORT_TIMEOUT) {
+            sense_hist.timeout++;
+            if (sense_hist.timeout >= PORT_TIMEOUT) {
+                sense_hist.state = mSense;
+                if (!mSense) { RESET_BUS; }
+                sense_hist.timeout = 0;
+                master_send_waiting.bits.status = true;
+            }
+        }
+    } else {
+        sense_hist.timeout = 0;
+    }
+
+    if (timeout_err_counter < TIMEOUT_ERR_TIMEOUT)
+        timeout_err_counter++;
 }
 
 // ******************************************************************************************************
