@@ -8,6 +8,10 @@
 
 /** INCLUDES ******************************************************************/
 
+#include <xc.h>
+#include <stdbool.h>
+#include <inttypes.h>
+
 #include "HardwareProfile.h"
 #include "ringBuffer.h"
 #include "usart.h"
@@ -51,8 +55,6 @@
 
 /** VARIABLES *****************************************************************/
 
-#pragma udata
-
 uint8_t USB_Out_Buffer[32];
 uint8_t version_hw;
 
@@ -60,8 +62,6 @@ uint8_t version_hw;
 volatile ring_generic ring_USB_datain;
 // USART -> USB ring buffer
 volatile ring_generic ring_USART_datain;
-
-#pragma idata
 
 // XpressNET device currently being requested
 volatile current current_dev = { 0, 0, 0, 0 };
@@ -106,8 +106,7 @@ volatile uint8_t timeout_err_counter = TIMEOUT_ERR_TIMEOUT;
 
 /** PRIVATE PROTOTYPES ********************************************************/
 
-void user_init(void);
-void initialize_system(void);
+void init(void);
 void init_devices(void);
 uint8_t calc_parity(uint8_t data);
 void check_device_data_to_USB(void);
@@ -184,7 +183,7 @@ void __interrupt(low_priority) low_isr(void) {
 /** FUNCTIONS *****************************************************************/
 
 void main(void) {
-	initialize_system();
+	init();
     USBDeviceAttach();
 
 	while (true) {
@@ -244,18 +243,12 @@ void main(void) {
 	}
 }
 
-void initialize_system(void) {
-	ADCON1 = 0x0F;
-	ADCON0 = 0;
+void init(void) {
+#if (defined(__18CXX) & !defined(PIC18F87J50_PIM))
+	ADCON1 |= 0x0F; // Default all pins to digital
+#endif
 
-	init_devices();
-	user_init();
-	USBDeviceInit();
-	USARTInit();
-}
-
-void user_init(void) {
-	// init ring buffers
+    // init ring buffers
 	ringBufferInit(ring_USB_datain, 32);
 	ringBufferInit(ring_USART_datain, 32);
 
@@ -263,7 +256,7 @@ void user_init(void) {
 	ANSEL = 0x00;
 	ANSELH = 0x00;
 
-	// enable PORTA and PORTB pull-ups (bacause of USART reading)
+	// enable PORTA and PORTB pull-ups (because of USART reading)
 	INTCON2bits.RABPU = 0;
 
 	// Initialize all of the LED pins
@@ -283,18 +276,25 @@ void user_init(void) {
 	PIR1bits.TMR2IF = 0;     // reset overflow flag
 	PIE1bits.TMR2IE = 1;     // enable timer2 interrupts
 	IPR1bits.TMR2IP = 0;     // timer2 interrupt low level
-	                         //
+
 	RCONbits.IPEN = 1;       // enable high and low priority interrupts
 	INTCONbits.PEIE = 1;     // Enable peripheral interrupts
-	INTCONbits.GIE = 1;      // enable global interrupts
-	INTCONbits.GIEH = 1;
-	INTCONbits.GIEL = 1;
 
 	INTCONbits.RABIE = 0;  // enable port interrupts
 	INTCON2bits.RABIP = 1; // interrupt in high level
 	                       // interrupt is fired on port change
 
 	T2CONbits.TMR2ON = 1; // enable timer2
+
+	init_devices();
+	USBDeviceInit();
+	USARTInit();
+
+	version_hw = detect_hw_version();
+    
+  	INTCONbits.GIEL = 1;        // Enable low-level interrupts
+	INTCONbits.GIEH = 1;        // Enable high-level interrupts
+	RCONbits.IPEN = 1;          // enable all interrupts
 }
 
 void timer_10ms(void) {
