@@ -43,11 +43,6 @@
 //  project work with the HID Bootloader
 //#define PROGRAMMABLE_WITH_USB_HID_BOOTLOADER
 
-/** Board definition ***********************************************/
-
-#define IO_OUT(TRIS, MASK) { TRIS &= ~MASK; }
-#define IO_IN(TRIS, MASK) { TRIS |= MASK; }
-
 /** LEDs ***********************************************************/
 
 #define IO_LED_In_LAT          LATCbits.LC0
@@ -70,18 +65,18 @@
 #define IO_XNPWR_LAT           LATCbits.LC4
 
 static inline void IO_XNPWR_set(bool value) {
-    IO_XNPWR_LAT = (value ^ (version_hw == VERSION_HW_5));
+    IO_XNPWR_LAT = (value ^ (version_hw == VERSION_HW_OLD));
 }
 
 static inline bool IO_XNPWR_get(void) {
-    return (IO_XNPWR_LAT ^ (version_hw == VERSION_HW_5));
+    return (IO_XNPWR_LAT ^ (version_hw == VERSION_HW_OLD));
 }
 
 #define IO_SENSE_get()         (!PORTBbits.RB4)
 
+#define IO_HW_VERSION_LAT      LATCbits.LC7
 #define IO_HW_VERSION_PORT     PORTCbits.RC7
-#define IO_HW_VERSION_TRIS     TRISC
-#define IO_HW_VERSION_MASK     0x80
+#define IO_HW_VERSION_TRIS     TRISCbits.TRISC7
 
 static inline void IO_init(void) {
     TRISBbits.TRISB4 = 1;

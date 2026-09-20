@@ -235,8 +235,6 @@ void init(void) {
     ADCON1 |= 0x0F; // Default all pins to digital
 #endif
 
-    version_hw = detect_hw_version();
-
     // init ring buffers
     ringBufferInit(ring_USB_datain, 32);
     ringBufferInit(ring_USART_datain, 32);
@@ -247,6 +245,8 @@ void init(void) {
 
     // enable PORTA and PORTB pull-ups (because of USART reading)
     INTCON2bits.RABPU = 0;
+
+    version_hw = detect_hw_version();
 
     // Initialize all GPIO
     IO_init();
@@ -944,9 +944,10 @@ void check_device_data_to_USB(void) {
 uint8_t detect_hw_version(void) {
     // HW v5.0 contains pull-down on IO_HW_VERSION pin
     // In HW <v5.0 the pin is floating
-    IO_OUT(IO_HW_VERSION_TRIS, IO_HW_VERSION_MASK);
-    IO_HW_VERSION_PORT = 1;
-    IO_IN(IO_HW_VERSION_TRIS, IO_HW_VERSION_MASK);
+    IO_HW_VERSION_TRIS = 0; // output
+    IO_HW_VERSION_LAT = 1; // output high
+    __delay_us(1);
+    IO_HW_VERSION_TRIS = 1; // input
     NOP();
     NOP();
     return IO_HW_VERSION_PORT ? VERSION_HW_OLD : VERSION_HW_5;
