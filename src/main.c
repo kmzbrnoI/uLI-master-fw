@@ -106,29 +106,29 @@ volatile uint8_t timeout_err_counter = TIMEOUT_ERR_TIMEOUT;
 
 /** PRIVATE PROTOTYPES ********************************************************/
 
-void init(void);
-void init_devices(void);
-uint8_t calc_parity(uint8_t data);
-void check_device_data_to_USB(void);
-void timer_10ms(void);
+static void init(void);
+static void init_devices(void);
+static uint8_t calc_parity(uint8_t data);
+static void check_device_data_to_USB(void);
+static void timer_10ms(void);
 static uint8_t detect_hw_version(void);
 
 // USB functions
-void USB_send(void);
-void USB_receive(void);
-void dump_buf_to_USB(ring_generic* buf);
-void parse_command_for_master(uint8_t start, uint8_t len);
-bool USB_send_master_data(uint8_t first, uint8_t second, uint8_t third);
-void USB_buffer_status(void);
+static void USB_send(void);
+static void USB_receive(void);
+static void dump_buf_to_USB(ring_generic* buf);
+static void parse_command_for_master(uint8_t start, uint8_t len);
+static bool USB_send_master_data(uint8_t first, uint8_t second, uint8_t third);
+static void USB_buffer_status(void);
 
 // USART (XpressNET) functions
-void USART_receive_interrupt(void);
-void USART_check_timeouts(void);
-void USART_send_next_frame(void);
-void USART_send_rest_of_message(void);
-void USART_request_next_device(void);
-void USART_ni_sent(void);
-void USART_send(void);
+static void USART_receive_interrupt(void);
+static void USART_check_timeouts(void);
+static void USART_send_next_frame(void);
+static void USART_send_rest_of_message(void);
+static void USART_request_next_device(void);
+static void USART_ni_sent(void);
+static void USART_send(void);
 
 /** INTERRUPTS ****************************************************************/
 
@@ -276,15 +276,8 @@ void init(void) {
 	PIR1bits.TMR2IF = 0;     // reset overflow flag
 	PIE1bits.TMR2IE = 1;     // enable timer2 interrupts
 	IPR1bits.TMR2IP = 0;     // timer2 interrupt low level
-
-	RCONbits.IPEN = 1;       // enable high and low priority interrupts
 	INTCONbits.PEIE = 1;     // Enable peripheral interrupts
-
-	INTCONbits.RABIE = 0;  // enable port interrupts
-	INTCON2bits.RABIP = 1; // interrupt in high level
-	                       // interrupt is fired on port change
-
-	T2CONbits.TMR2ON = 1; // enable timer2
+	T2CONbits.TMR2ON = 1;    // enable timer2
 
 	init_devices();
 	USBDeviceInit();
