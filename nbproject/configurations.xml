@@ -5,19 +5,19 @@
                    displayName="Header Files"
                    projectFiles="true">
       <logicalFolder name="stack" displayName="usb_stack" projectFiles="true">
-        <itemPath>../src/usb_stack/usb.h</itemPath>
-        <itemPath>../src/usb_stack/usb_ch9.h</itemPath>
-        <itemPath>../src/usb_stack/usb_common.h</itemPath>
-        <itemPath>../src/usb_stack/usb_config.h</itemPath>
-        <itemPath>../src/usb_stack/usb_device.h</itemPath>
-        <itemPath>../src/usb_stack/usb_function_cdc.h</itemPath>
-        <itemPath>../src/usb_stack/usb_hal_pic18.h</itemPath>
+        <itemPath>src/usb_stack/usb.h</itemPath>
+        <itemPath>src/usb_stack/usb_ch9.h</itemPath>
+        <itemPath>src/usb_stack/usb_common.h</itemPath>
+        <itemPath>src/usb_stack/usb_config.h</itemPath>
+        <itemPath>src/usb_stack/usb_device.h</itemPath>
+        <itemPath>src/usb_stack/usb_function_cdc.h</itemPath>
+        <itemPath>src/usb_stack/usb_hal_pic18.h</itemPath>
       </logicalFolder>
-      <itemPath>../src/Compiler.h</itemPath>
-      <itemPath>../src/HardwareProfile.h</itemPath>
-      <itemPath>../src/main.h</itemPath>
-      <itemPath>../src/ringBuffer.h</itemPath>
-      <itemPath>../src/usart.h</itemPath>
+      <itemPath>src/Compiler.h</itemPath>
+      <itemPath>src/HardwareProfile.h</itemPath>
+      <itemPath>src/main.h</itemPath>
+      <itemPath>src/ringBuffer.h</itemPath>
+      <itemPath>src/usart.h</itemPath>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"
@@ -33,13 +33,13 @@
                    displayName="Source Files"
                    projectFiles="true">
       <logicalFolder name="stack" displayName="usb_stack" projectFiles="true">
-        <itemPath>../src/usb_stack/usb_descriptors.c</itemPath>
-        <itemPath>../src/usb_stack/usb_device.c</itemPath>
-        <itemPath>../src/usb_stack/usb_function_cdc.c</itemPath>
+        <itemPath>src/usb_stack/usb_descriptors.c</itemPath>
+        <itemPath>src/usb_stack/usb_device.c</itemPath>
+        <itemPath>src/usb_stack/usb_function_cdc.c</itemPath>
       </logicalFolder>
-      <itemPath>../src/main.c</itemPath>
-      <itemPath>../src/ringBuffer.c</itemPath>
-      <itemPath>../src/usart.c</itemPath>
+      <itemPath>src/main.c</itemPath>
+      <itemPath>src/ringBuffer.c</itemPath>
+      <itemPath>src/usart.c</itemPath>
     </logicalFolder>
   </logicalFolder>
   <sourceRootList>
