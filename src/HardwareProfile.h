@@ -85,16 +85,16 @@ static inline bool IO_XNPWR_get(void) {
 
 static inline void IO_init(void) {
     TRISBbits.TRISB4 = 1;
-    
+
     TRISCbits.TRISC0 = 0;
     TRISCbits.TRISC1 = 0;
     TRISCbits.TRISC2 = 0;
     TRISCbits.TRISC4 = 0;
 
     IO_XNPWR_set(false);
-  	IO_LED_Pwr_On();
-	IO_LED_In_On();
-	IO_LED_Out_On();
+    IO_LED_Pwr_On();
+    IO_LED_In_On();
+    IO_LED_Out_On();
 }
 
 #endif  //HARDWARE_PROFILE_H
