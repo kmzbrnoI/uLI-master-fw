@@ -9,8 +9,6 @@
 
 #include <stdbool.h>
 
-#include "GenericTypeDefs.h"
-
 #define VERSION_HW      0x42
 #define VERSION_SW      0x15
 

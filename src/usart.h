@@ -6,18 +6,18 @@
 #ifndef USART_H
 #define	USART_H
 
-#include "GenericTypeDefs.h"    
-    
+#include <stdbool.h>
+
 typedef struct {
     uint8_t data;
-    BOOL ninth;
-    BOOL FERR;
+    bool ninth;
+    bool FERR;
 } nine_data;
     
 void USARTInit(void);
 void USARTWriteByte(unsigned ninth, uint8_t data);
 nine_data USARTReadByte(void);
-BOOL USARTInputData(void);
+bool USARTInputData(void);
 
 #define XPRESSNET_DIR       LATBbits.LATB6
 #define XPRESSNET_OUT       1
