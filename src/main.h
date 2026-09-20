@@ -12,7 +12,7 @@
 extern uint8_t version_hw;
 #define VERSION_HW_OLD  0x42
 #define VERSION_HW_5    0x50
-#define VERSION_SW      0x15
+#define VERSION_SW      0x16
 
 #define ROUND_MAX       5
 #define ROUND_RACK      4 // 4. round is round when RACK is sent to active devices
