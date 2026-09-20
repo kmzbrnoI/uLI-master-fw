@@ -50,24 +50,24 @@
 
 /** LEDs ***********************************************************/
 
-#define mLED_In_LAT          LATCbits.LC0
-#define mLED_In_On()         { mLED_In_LAT = 1; }
-#define mLED_In_Off()        { mLED_In_LAT = 0; }
-#define mLED_In_Toggle()     { mLED_In_LAT = !mLED_In_LAT; }
+#define IO_LED_In_LAT          LATCbits.LC0
+#define IO_LED_In_On()         { IO_LED_In_LAT = 1; }
+#define IO_LED_In_Off()        { IO_LED_In_LAT = 0; }
+#define IO_LED_In_Toggle()     { IO_LED_In_LAT = !IO_LED_In_LAT; }
 
-#define mLED_Out_LAT         LATCbits.LC1
-#define mLED_Out_On()        { mLED_Out_LAT = 1; }
-#define mLED_Out_Off()       { mLED_Out_LAT = 0; }
-#define mLED_Out_Toggle()    { mLED_Out_LAT = !mLED_Out_LAT; }
+#define IO_LED_Out_LAT         LATCbits.LC1
+#define IO_LED_Out_On()        { IO_LED_Out_LAT = 1; }
+#define IO_LED_Out_Off()       { IO_LED_Out_LAT = 0; }
+#define IO_LED_Out_Toggle()    { IO_LED_Out_LAT = !IO_LED_Out_LAT; }
 
-#define mLED_PWR_LAT         LATCbits.LC2
-#define mLED_Pwr_On()        { mLED_PWR_LAT = 1; }
-#define mLED_Pwr_Off()       { mLED_PWR_LAT = 0; }
-#define mLED_Pwr_Toggle()    { mLED_PWR_LAT = !mLED_PWR_LAT; }
+#define IO_LED_PWR_LAT         LATCbits.LC2
+#define IO_LED_Pwr_On()        { IO_LED_PWR_LAT = 1; }
+#define IO_LED_Pwr_Off()       { IO_LED_PWR_LAT = 0; }
+#define IO_LED_Pwr_Toggle()    { IO_LED_PWR_LAT = !IO_LED_PWR_LAT; }
 
 /** IO ************************************************************/
 
-#define IO_XNPWR_LAT         LATCbits.LC4
+#define IO_XNPWR_LAT           LATCbits.LC4
 
 static inline void IO_XNPWR_set(bool value) {
     IO_XNPWR_LAT = (value ^ (version_hw == VERSION_HW_5));
@@ -77,7 +77,7 @@ static inline bool IO_XNPWR_get(void) {
     return (IO_XNPWR_LAT ^ (version_hw == VERSION_HW_5));
 }
 
-#define mSense               (!PORTBbits.RB4)
+#define IO_SENSE_get()         (!PORTBbits.RB4)
 
 #define IO_HW_VERSION_PORT   PORTCbits.RC7
 #define IO_HW_VERSION_TRIS   TRISC
@@ -92,9 +92,9 @@ static inline void IO_init(void) {
     TRISCbits.TRISC4 = 0;
 
     IO_XNPWR_set(false);
-  	mLED_Pwr_On();
-	mLED_In_On();
-	mLED_Out_On();
+  	IO_LED_Pwr_On();
+	IO_LED_In_On();
+	IO_LED_Out_On();
 }
 
 #endif  //HARDWARE_PROFILE_H

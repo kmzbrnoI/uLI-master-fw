@@ -313,7 +313,7 @@ void timer_10ms(void) {
     if (mLED_In_Timeout < 2 * MLED_IN_MAX_TIMEOUT) {
         mLED_In_Timeout++;
         if (mLED_In_Timeout == MLED_IN_MAX_TIMEOUT) {
-            mLED_In_On();
+            IO_LED_In_On();
         }
     }
 
@@ -321,7 +321,7 @@ void timer_10ms(void) {
     if ((mLED_Out_Timeout < 2 * MLED_OUT_MAX_TIMEOUT) && (USBGetDeviceState() == CONFIGURED_STATE)) {
         mLED_Out_Timeout++;
         if (mLED_Out_Timeout == MLED_OUT_MAX_TIMEOUT) {
-            mLED_Out_Off();
+            IO_LED_Out_Off();
         }
     }
 #endif
@@ -335,24 +335,24 @@ void timer_10ms(void) {
         if (pwr_led_status_counter == 2 * pwr_led_status) {
             // wait between cycles
             pwr_led_base_timeout = PWR_LED_LONG_COUNT;
-            mLED_Pwr_Off();
+            IO_LED_Pwr_Off();
         } else if (pwr_led_status_counter > 2 * pwr_led_status) {
             // new base cycle
             pwr_led_base_timeout = PWR_LED_SHORT_COUNT;
             pwr_led_status_counter = 0;
-            mLED_Pwr_On();
+            IO_LED_Pwr_On();
         } else {
-            mLED_Pwr_Toggle();
+            IO_LED_Pwr_Toggle();
         }
     }
 
     // sense history
-    if (sense_hist.state != mSense) {
+    if (sense_hist.state != IO_SENSE_get()) {
         if (sense_hist.timeout < PORT_TIMEOUT) {
             sense_hist.timeout++;
             if (sense_hist.timeout >= PORT_TIMEOUT) {
-                sense_hist.state = mSense;
-                if (!mSense) { RESET_BUS; }
+                sense_hist.state = IO_SENSE_get();
+                if (!IO_SENSE_get()) { RESET_BUS; }
                 sense_hist.timeout = 0;
                 master_send_waiting.bits.status = true;
             }
@@ -377,18 +377,18 @@ bool USER_USB_CALLBACK_EVENT_HANDLER(USB_EVENT event, void* pdata, uint16_t size
 			break;
 
 		case EVENT_SUSPEND:
-			mLED_Out_On();
+			IO_LED_Out_On();
 			ringClear(&ring_USART_datain);
 			ringClear(&ring_USB_datain);
 			break;
 
 		case EVENT_RESUME:
-			mLED_Out_Off();
+			IO_LED_Out_Off();
 			break;
 
 		case EVENT_CONFIGURED:
 			CDCInitEP();
-			mLED_Out_Off();
+			IO_LED_Out_Off();
 			break;
 
 		case EVENT_SET_DESCRIPTOR:
@@ -529,7 +529,7 @@ void USART_receive_interrupt(void) {
 #ifndef DEBUG
 	// toggle LED
 	if (mLED_In_Timeout >= 2 * MLED_IN_MAX_TIMEOUT) {
-		mLED_In_Off();
+		IO_LED_In_Off();
 		mLED_In_Timeout = 0;
 	}
 #endif
@@ -658,7 +658,7 @@ void USB_receive(void) {
 #ifndef DEBUG
 		// toggle LED
 		if (mLED_Out_Timeout >= 2 * MLED_OUT_MAX_TIMEOUT) {
-			mLED_Out_On();
+			IO_LED_Out_On();
 			mLED_Out_Timeout = 0;
 		}
 #endif
