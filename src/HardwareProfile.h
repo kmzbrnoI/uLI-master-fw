@@ -52,26 +52,26 @@
 #define mInitPwrControl()    { TRISCbits.TRISC4 = 0; }
 #define mInitSense()         { TRISBbits.TRISB4 = 1; }
 
-#define mLED_In_PORT         PORTCbits.RC0
-#define mLED_Out_PORT        PORTCbits.RC1
-#define mLED_PWR_PORT        PORTCbits.RC2
-#define XN_PWR_PORT          PORTCbits.RC4
+#define mLED_In_LAT          LATCbits.LC0
+#define mLED_Out_LAT         LATCbits.LC1
+#define mLED_PWR_LAT         LATCbits.LC2
+#define XN_PWR_LAT           LATCbits.LC4
 #define mSense               (!PORTBbits.RB4)
 
-#define mLED_In_On()         { mLED_In_PORT = 1; }
-#define mLED_Out_On()        { mLED_Out_PORT = 1; }
-#define mLED_Pwr_On()        { mLED_PWR_PORT = 1; }
-#define XN_Pwr_On()          { XN_PWR_PORT = 1; }
+#define mLED_In_On()         { mLED_In_LAT = 1; }
+#define mLED_Out_On()        { mLED_Out_LAT = 1; }
+#define mLED_Pwr_On()        { mLED_PWR_LAT = 1; }
+#define XN_Pwr_On()          { XN_PWR_LAT = 1; }
 
-#define mLED_In_Off()        { mLED_In_PORT = 0; }
-#define mLED_Out_Off()       { mLED_Out_PORT = 0; }
-#define mLED_Pwr_Off()       { mLED_PWR_PORT = 0; }
-#define XN_Pwr_Off()         { XN_PWR_PORT = 0; }
+#define mLED_In_Off()        { mLED_In_LAT = 0; }
+#define mLED_Out_Off()       { mLED_Out_LAT = 0; }
+#define mLED_Pwr_Off()       { mLED_PWR_LAT = 0; }
+#define XN_Pwr_Off()         { XN_PWR_LAT = 0; }
 
-#define mLED_In_Toggle()     { mLED_In_PORT = !mLED_In_PORT; }
-#define mLED_Out_Toggle()    { mLED_Out_PORT = !mLED_Out_PORT; }
-#define mLED_Pwr_Toggle()    { mLED_PWR_PORT = !mLED_PWR_PORT; }
-#define XN_Pwr_Toggle()      { XN_PWR_PORT = !XN_PWR_PORT; }
+#define mLED_In_Toggle()     { mLED_In_LAT = !mLED_In_LAT; }
+#define mLED_Out_Toggle()    { mLED_Out_LAT = !mLED_Out_LAT; }
+#define mLED_Pwr_Toggle()    { mLED_PWR_LAT = !mLED_PWR_LAT; }
+#define XN_Pwr_Toggle()      { XN_PWR_LAT = !XN_PWR_LAT; }
 
 /** IO ************************************************************/
 
