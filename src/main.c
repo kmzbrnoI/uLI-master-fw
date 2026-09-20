@@ -1,10 +1,4 @@
-/*******************************************************************************
- FileName:      main.c
- Processor:     PIC18F14K50
- Hardware:      uLI4 - JH&MP 2016
- Complier:      Microchip C18
- Author:        Jan Horacek
- */
+/* uLI-mater main firmware file. */
 
 /** INCLUDES ******************************************************************/
 
@@ -14,13 +8,13 @@
 
 #include "HardwareProfile.h"
 #include "config.h"
+#include "main.h"
 #include "ringBuffer.h"
 #include "usart.h"
 #include "usb.h"
 #include "usb_config.h"
 #include "usb_device.h"
 #include "usb_device_cdc.h"
-#include "main.h"
 
 /** DEFINES *******************************************************************/
 
@@ -181,7 +175,7 @@ void main(void) {
 
     while (true) {
         USBDeviceTasks();
-        
+
         // Normal inquiry answer timeout.
         // This function is not placed in interrupt to serve interrupt as
         // fast as possible.
@@ -230,7 +224,7 @@ void main(void) {
             check_device_data_to_USB();
             USART_last_start = ring_USART_datain.ptr_e;
         }
-        
+
         // clear watchdog timer
         ClrWdt();
     }
@@ -242,7 +236,7 @@ void init(void) {
 #endif
 
     version_hw = detect_hw_version();
-    
+
     // init ring buffers
     ringBufferInit(ring_USB_datain, 32);
     ringBufferInit(ring_USART_datain, 32);
@@ -270,7 +264,7 @@ void init(void) {
     init_devices();
     USBDeviceInit();
     USARTInit();
-    
+
     INTCONbits.GIEL = 1;        // Enable low-level interrupts
     INTCONbits.GIEH = 1;        // Enable high-level interrupts
     RCONbits.IPEN = 1;          // enable all interrupts
@@ -417,18 +411,18 @@ void USART_check_timeouts(void) {
     // check for timeout
     if (((USART_last_start != ring_USART_datain.ptr_e) || (current_dev.reacted))
         && (usart_timeout >= USART_MAX_TIMEOUT) && (!current_dev.finished)) {
-        
+
         // the (!current_dev.finished) condition guarantees us this if will
         // not be entered after the message was received
-        
+
         // disable receive interrupt, so it does not interfere with this function
         PIE1bits.RCIE = 0;
-        
+
         // delete last incoming message and wait for next message
         ring_USART_datain.ptr_e = USART_last_start;
         if (ring_USART_datain.ptr_e == ring_USART_datain.ptr_b) ring_USART_datain.empty = true;
         usart_timeout = 0;
-        current_dev.reacted = false;        
+        current_dev.reacted = false;
 
         // inform PC about timeout
         if (timeout_err_counter == TIMEOUT_ERR_TIMEOUT) {
@@ -456,9 +450,9 @@ void USART_receive_interrupt(void) {
     uint8_t tmp, parity;
 
     usart_timeout = 0;
-    
+
     received = USARTReadByte();
-    
+
     if (current_dev.finished) {
         // next byte was received after the end of message -> probably
         // bad length -> increase timeout to let the device transfer
@@ -466,7 +460,7 @@ void USART_receive_interrupt(void) {
         current_dev.timeout = NI_TIMEOUT / 2;
         return;
     }
-    
+
     current_dev.reacted = true;
     current_dev.timeout = 0;
 
@@ -517,7 +511,7 @@ void USART_receive_interrupt(void) {
 
         current_dev.finished = true;
 
-        // whole message received -> wait a few microseconds and send next data     
+        // whole message received -> wait a few microseconds and send next data
         current_dev.timeout = NI_TIMEOUT / 2;
     }
 
