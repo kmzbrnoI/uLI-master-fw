@@ -13,6 +13,7 @@
 #include <inttypes.h>
 
 #include "HardwareProfile.h"
+#include "config.h"
 #include "ringBuffer.h"
 #include "usart.h"
 #include "usb.h"
