@@ -13,20 +13,20 @@
 //  option carefully and determine which options are desired/required
 //  for your application.
 
-//#define USE_SELF_POWER_SENSE_IO
-#define tris_self_power TRISAbits.TRISA2 // Input
+//#define USE_SELF_POWER_SENSE_IO	
+#define tris_self_power     TRISAbits.TRISA2    // Input
 #if defined(USE_SELF_POWER_SENSE_IO)
-#define self_power PORTAbits.RA2
+#define self_power          PORTAbits.RA2
 #else
-#define self_power 1
+#define self_power          1
 #endif
 
 //#define USE_USB_BUS_SENSE_IO
-#define tris_usb_bus_sense TRISAbits.TRISA1 // Input
+#define tris_usb_bus_sense  TRISAbits.TRISA1    // Input
 #if defined(USE_USB_BUS_SENSE_IO)
-#define USB_BUS_SENSE PORTAbits.RA1
+#define USB_BUS_SENSE       PORTAbits.RA1
 #else
-#define USB_BUS_SENSE 1
+#define USB_BUS_SENSE       1
 #endif
 
 /*******************************************************************/
@@ -37,9 +37,9 @@
 /*******************************************************************/
 /*******************************************************************/
 
-//Uncomment the following line to make the output HEX of this
+//Uncomment the following line to make the output HEX of this 
 //  project work with the HID Bootloader
-//#define PROGRAMMABLE_WITH_USB_HID_BOOTLOADER
+//#define PROGRAMMABLE_WITH_USB_HID_BOOTLOADER	
 
 /** Board definition ***********************************************/
 //These defintions will tell the main() function which board is
@@ -49,36 +49,45 @@
 //  required in the stack provided demos.  They are not required in
 //  final application design.
 
+#define DEMO_BOARD LOW_PIN_COUNT_USB_DEVELOPMENT_KIT
+#define LOW_PIN_COUNT_USB_DEVELOPMENT_KIT
 #define CLOCK_FREQ 48000000
 #define GetSystemClock() CLOCK_FREQ
 
-/** LED ************************************************************/
+#define IO_OUT(TRIS, MASK) { TRIS &= ~MASK; }
+#define IO_IN(TRIS, MASK) { TRIS |= MASK; }
 
-#define mInitAllLEDs();      TRISC &= 0xF8;
+/** LEDs ***********************************************************/
 
-#define mLED_In              LATCbits.LATC0
-#define mLED_Out             LATCbits.LATC1
-#define mLED_Pwr             LATCbits.LATC2
+#define mInitAllLEDs()       { TRISC &= 0xF8; }
+#define mInitPwrControl()    { TRISCbits.TRISC4 = 0; }
+#define mInitSense()         { TRISBbits.TRISB4 = 1; }
 
-#define mLED_In_On();        mLED_In = 1;
-#define mLED_Out_On();       mLED_Out = 1;
-#define mLED_Pwr_On();       mLED_Pwr = 1;
-
-#define mLED_In_Off();       mLED_In = 0;
-#define mLED_Out_Off();      mLED_Out = 0;
-#define mLED_Pwr_Off();      mLED_Pwr = 0;
-
-#define mLED_In_Toggle();    mLED_In = !mLED_In;
-#define mLED_Out_Toggle();   mLED_Out = !mLED_Out;
-#define mLED_Pwr_Toggle();   mLED_Pwr = !mLED_Pwr;
-
+#define mLED_In_PORT         PORTCbits.RC0
+#define mLED_Out_PORT        PORTCbits.RC1
+#define mLED_PWR_PORT        PORTCbits.RC2
+#define XN_PWR_PORT          PORTCbits.RC4
 #define mSense               (!PORTBbits.RB4)
-#define mInitSense           (TRISBbits.TRISB4 = 1)
 
-#define mInitPwrControl      (TRISCbits.TRISC4 = 0)
-#define mPwrControl          (!LATCbits.LATC4)
-#define mPwrControlPin       (LATCbits.LATC4)
-#define mPwrControlOn        (0)
-#define mPwrControlOff       (1)
+#define mLED_In_On()         { mLED_In_PORT = 1; }
+#define mLED_Out_On()        { mLED_Out_PORT = 1; }
+#define mLED_Pwr_On()        { mLED_PWR_PORT = 1; }
+#define XN_Pwr_On()          { XN_PWR_PORT = 1; }
+
+#define mLED_In_Off()        { mLED_In_PORT = 0; }
+#define mLED_Out_Off()       { mLED_Out_PORT = 0; }
+#define mLED_Pwr_Off()       { mLED_PWR_PORT = 0; }
+#define XN_Pwr_Off()         { XN_PWR_PORT = 0; }
+
+#define mLED_In_Toggle()     { mLED_In_PORT = !mLED_In_PORT; }
+#define mLED_Out_Toggle()    { mLED_Out_PORT = !mLED_Out_PORT; }
+#define mLED_Pwr_Toggle()    { mLED_PWR_PORT = !mLED_PWR_PORT; }
+#define XN_Pwr_Toggle()      { XN_PWR_PORT = !XN_PWR_PORT; }
+
+/** IO ************************************************************/
+
+#define IO_HW_VERSION_PORT   PORTCbits.RC7
+#define IO_HW_VERSION_TRIS   TRISC
+#define IO_HW_VERSION_MASK   0x80
 
 #endif  //HARDWARE_PROFILE_H

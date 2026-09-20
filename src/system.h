@@ -1,0 +1,10 @@
+#ifndef SYSTEM_H
+#define SYSTEM_H
+
+#define FIXED_ADDRESS_MEMORY
+#define IN_DATA_BUFFER_ADDRESS_TAG __at(0x240)
+#define OUT_DATA_BUFFER_ADDRESS_TAG __at(0x280)
+#define CONTROL_BUFFER_ADDRESS_TAG __at(0x2C0)
+#define DRIVER_DATA_ADDRESS_TAG __at(0x2C8)
+
+#endif

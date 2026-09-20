@@ -3,9 +3,10 @@
  * (c) Jan Horacek 2016
  */
 
-#include <p18f14k50.h>
-#include "usart.h"
+#include <xc.h>
+
 #include "GenericTypeDefs.h"
+#include "usart.h"
 
 void USARTInit(void)
 {

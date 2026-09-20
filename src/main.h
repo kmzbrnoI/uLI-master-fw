@@ -7,6 +7,8 @@
 #ifndef MAIN_H
 #define MAIN_H
 
+#include <stdbool.h>
+
 #include "GenericTypeDefs.h"
 
 #define VERSION_HW      0x42
@@ -17,37 +19,37 @@
 
 // device currently being adressed by master
 typedef struct {
-	BYTE index;   // requested device index
-	BYTE timeout; // after timeout is too big, next device is picked
-	BOOL reacted; // if the device has reacted to normal inquiry
-	BYTE round;   // current round
-    BOOL finished;// whether the whole message was received
+	uint8_t index;   // requested device index
+	uint8_t timeout; // after timeout is too big, next device is picked
+	bool reacted; // if the device has reacted to normal inquiry
+	uint8_t round;   // current round
+    bool finished;// whether the whole message was received
 } current;
 
 #define PORT_TIMEOUT 10 // 100 ms to consider port changed (yes, really, it is power)
 
 typedef struct {
-	BYTE timeout;
-	BOOL state;
+	uint8_t timeout;
+	bool state;
 } port_history;
 
 typedef union {
 	struct {
-		BOOL status : 1;
-		BOOL active_devices : 1;
-		BOOL keep_alive : 1;
+		bool status : 1;
+		bool active_devices : 1;
+		bool keep_alive : 1;
 	} bits;
-	BYTE all;
+	uint8_t all;
 } master_waiting;
 
 #define KA_RECEIVE_MAX      500 // 5 s = keep-alive receive timeout
 #define KA_SEND_INTERVAL    100 // 1 s = keep-alive packet sending
 
 typedef struct {
-	BOOL receive : 1; // disable bus after not receiving keep-alive packets
-	BOOL send : 1;    // send keep-alive packets
-	WORD receive_timer;
-	BYTE send_timer;
+	bool receive : 1; // disable bus after not receiving keep-alive packets
+	bool send : 1;    // send keep-alive packets
+	uint16_t receive_timer;
+	uint8_t send_timer;
 } alive;
 
 #endif /* MAIN_H */
