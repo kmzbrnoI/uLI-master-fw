@@ -82,8 +82,6 @@ void (*volatile sent_callback)(void) = NULL;
 volatile uint8_t usart_to_send = 0;
 volatile bool usart_last_byte_sent = false;
 
-volatile bool usb_configured = false;
-
 volatile uint32_t active_devices = 0;
 volatile uint32_t dirty_devices = 0;
 
@@ -326,7 +324,7 @@ void timer_10ms(void) {
     }
 
     // mLEDOut timeout
-    if ((mLED_Out_Timeout < 2 * MLED_OUT_MAX_TIMEOUT) && (usb_configured)) {
+    if ((mLED_Out_Timeout < 2 * MLED_OUT_MAX_TIMEOUT) && (USBGetDeviceState() == CONFIGURED_STATE)) {
         mLED_Out_Timeout++;
         if (mLED_Out_Timeout == MLED_OUT_MAX_TIMEOUT) {
             mLED_Out_Off();
@@ -372,68 +370,6 @@ void timer_10ms(void) {
     if (timeout_err_counter < TIMEOUT_ERR_TIMEOUT)
         timeout_err_counter++;
 }
-
-// ******************************************************************************************************
-// ************** USB Callback Functions ****************************************************************
-// ******************************************************************************************************
-// The USB firmware stack will call the callback functions USBCBxxx() in response to certain USB related
-// events. For example, if the host PC is powering down, it will stop sending out Start of Frame (SOF)
-// packets to your device. In response to this, all USB devices are supposed to decrease their power
-// consumption from the USB Vbus to <2.5mA each.  The USB module detects this condition (which according
-// to the USB specifications is 3+ms of no bus activity/SOF packets) and then calls the USBCBSuspend()
-// function. You should modify these callback functions to take appropriate actions for each of these
-// conditions. For example, in the USBCBSuspend(), you may wish to add code that will decrease power
-// consumption from Vbus to <2.5mA (such as by clock switching, turning off LEDs, putting the
-// microcontroller to sleep, etc.).  Then, in the USBCBWakeFromSuspend() function, you may then wish to
-// add code that undoes the power saving things done in the USBCBSuspend() function.
-
-// The USBCBSendResume() function is special, in that the USB stack will not automatically call this
-// function.  This function is meant to be called from the application firmware instead.  See the
-// additional comments near the function.
-
-void USBCBSuspend(void) {
-#if defined(__C30__)
-	USBSleepOnSuspend();
-#endif
-
-	usb_configured = false;
-	mLED_Out_On();
-	ringClear((ring_generic*)&ring_USART_datain);
-	ringClear((ring_generic*)&ring_USB_datain);
-}
-
-void USBCBWakeFromSuspend(void) {
-	usb_configured = true;
-	mLED_Out_Off();
-}
-
-void USBCB_SOF_Handler(void) {
-}
-
-void USBCBErrorHandler(void) {
-}
-
-void USBCBCheckOtherReq(void) {
-	USBCheckCDCRequest();
-}
-
-void USBCBStdSetDscHandler(void) {
-	// Must claim session ownership if supporting this request
-}
-
-void USBCBInitEP(void) {
-	CDCInitEP();
-	usb_configured = true;
-	mLED_Out_Off();
-}
-
-void USBCBSendResume(void) {
-}
-
-#if defined(ENABLE_EP0_DATA_RECEIVED_CALLBACK)
-void USBCBEP0DataReceived(void) {
-}
-#endif
 
 bool USER_USB_CALLBACK_EVENT_HANDLER(USB_EVENT event, void* pdata, uint16_t size) {
     USBCDCEventHandler(event, pdata, size);
