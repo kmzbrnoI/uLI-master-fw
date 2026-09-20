@@ -28,14 +28,6 @@
 #define USB_last_message_len    ringDistance(ring_USB_datain, last_start, ring_USB_datain.ptr_e)
 #define USART_last_message_len  ringDistance(ring_USART_datain, USART_last_start, ring_USART_datain.ptr_e)
 
-#define RESET_BUS               { current_dev.reacted = false; \
-                                  current_dev.timeout = 1;     \
-                                  current_dev.index = 1;       \
-                                  active_devices = 0;          \
-                                  dirty_devices = 0;           \
-                                  RCSTAbits.CREN = 0;          \
-                                  PIE1bits.RCIE = 0; }
-
 #define IsRACKRound             (current_dev.round == ROUND_RACK)
 
 #define USB_MAX_TIMEOUT         10 // 100 ms
@@ -110,6 +102,7 @@ static uint8_t calc_parity(uint8_t data);
 static void check_device_data_to_USB(void);
 static void timer_10ms(void);
 static uint8_t detect_hw_version(void);
+static void resetBus(void);
 
 // USB functions
 static void USB_send(void);
@@ -301,7 +294,7 @@ void timer_10ms(void) {
         if (keep_alive.receive_timer == KA_RECEIVE_MAX) {
             // computer crashed -> turn the bus off
             IO_XNPWR_set(false);
-            RESET_BUS;
+            resetBus();
             keep_alive.receive_timer = 0;
             keep_alive.receive = false;
             master_send_waiting.bits.status = true;
@@ -352,7 +345,8 @@ void timer_10ms(void) {
             sense_hist.timeout++;
             if (sense_hist.timeout >= PORT_TIMEOUT) {
                 sense_hist.state = IO_SENSE_get();
-                if (!IO_SENSE_get()) { RESET_BUS; }
+                if (!IO_SENSE_get())
+                    resetBus();
                 sense_hist.timeout = 0;
                 master_send_waiting.bits.status = true;
             }
@@ -676,10 +670,11 @@ void parse_command_for_master(uint8_t start, uint8_t len) {
         // set master status
         const bool xnPwr = db1 & 0b1;
         IO_XNPWR_set(xnPwr);
-        RCSTAbits.CREN = xnPwr;
-        PIE1bits.RCIE = xnPwr;
-        if (!xnPwr)
-            RESET_BUS;
+        if (xnPwr) {
+            USARTEnableReceive();
+        } else {
+            resetBus();
+        }
         keep_alive.send = ((db1 >> 3) & 0b1);
         keep_alive.receive = ((db1 >> 2) & 0b1);
         keep_alive.receive_timer = 0;
@@ -808,8 +803,7 @@ void USART_request_next_device(void) {
 #endif
 
     // 2) request current device
-    RCSTAbits.CREN = 1; // enable USART RX -- to be sure (because of overrun error)
-    PIE1bits.RCIE = 1;
+    USARTEnableReceive();
     current_dev.timeout = 0;
     current_dev.reacted = false;
     current_dev.finished = false;
@@ -961,6 +955,17 @@ uint8_t detect_hw_version(void) {
     NOP();
     NOP();
     return IO_HW_VERSION_PORT ? VERSION_HW_OLD : VERSION_HW_5;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void resetBus(void) {
+    current_dev.reacted = false;
+    current_dev.timeout = 1;
+    current_dev.index = 1;
+    active_devices = 0;
+    dirty_devices = 0;
+    USARTDisableReceive();
 }
 
 ////////////////////////////////////////////////////////////////////////////////

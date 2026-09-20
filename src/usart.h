@@ -1,11 +1,9 @@
-/*
- * Usart communication library header file
- * (c) Jan Horacek 2016
- */
+/* Usart communication library header file */
 
 #ifndef USART_H
-#define	USART_H
+#define USART_H
 
+#include <inttypes.h>
 #include <stdbool.h>
 
 typedef struct {
@@ -18,10 +16,11 @@ void USARTInit(void);
 void USARTWriteByte(bool ninth, uint8_t data);
 nine_data USARTReadByte(void);
 bool USARTInputData(void);
+void USARTEnableReceive(void);
+void USARTDisableReceive(void);
 
 #define XPRESSNET_DIR       LATBbits.LATB6
 #define XPRESSNET_OUT       1
 #define XPRESSNET_IN        0
 
-#endif	/* USART_H */
-
+#endif /* USART_H */
