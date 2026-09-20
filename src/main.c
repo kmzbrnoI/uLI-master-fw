@@ -136,7 +136,8 @@ void __interrupt(high_priority) high_isr(void) {
 		if (sent_callback)
             sent_callback();
 
-	if ((PIE1bits.RCIE) && (PIR1bits.RCIF))
+	// USART receive interrupt
+	if (PIR1bits.RCIF)
 		USART_receive_interrupt();
 }
 
