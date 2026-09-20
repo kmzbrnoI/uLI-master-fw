@@ -113,21 +113,21 @@ volatile current current_dev = { 0, 0, 0, 0 };
 
 // time between 2 bytes received from USB
 // increment every 100 us -> 100 ms timeout = 1 000
-volatile BYTE usb_timeout = 0;
+volatile uint8_t usb_timeout = 0;
 
 // time between 2 bytes received from USART
 // increment every 100 us -> 100 ms timeout = 1 000
-volatile WORD usart_timeout = 0;
-volatile BYTE USART_last_start = 0;
+volatile uint16_t usart_timeout = 0;
+volatile uint8_t USART_last_start = 0;
 
 // 10 ms timer counter
-volatile WORD ten_ms_counter = 0;
+volatile uint16_t ten_ms_counter = 0;
 
 // callback being called after byte is sent to USART
 void (*volatile sent_callback)(void) = NULL;
 
 // ondex of byte in ring_USB_datain to be sent to USART
-volatile BYTE usart_to_send = 0;
+volatile uint8_t usart_to_send = 0;
 volatile bool usart_last_byte_sent = FALSE;
 
 volatile bool usb_configured = FALSE;
@@ -137,20 +137,20 @@ volatile UINT32 dirty_devices = 0;
 
 volatile alive keep_alive = { 0, 0, 0, 0 };
 
-volatile BYTE mLED_In_Timeout = 2 * MLED_IN_MAX_TIMEOUT;
-volatile BYTE mLED_Out_Timeout = 2 * MLED_OUT_MAX_TIMEOUT;
+volatile uint8_t mLED_In_Timeout = 2 * MLED_IN_MAX_TIMEOUT;
+volatile uint8_t mLED_Out_Timeout = 2 * MLED_OUT_MAX_TIMEOUT;
 
 // Power led blinks pwr_led_status times, then stays blank for some time
 // and then repeats the whole cycle. This lets user to see software status.
-volatile BYTE pwr_led_base_timeout = PWR_LED_SHORT_COUNT;
-volatile BYTE pwr_led_base_counter = 0;
-volatile BYTE pwr_led_status_counter = 0;
-volatile BYTE pwr_led_status = 2;
+volatile uint8_t pwr_led_base_timeout = PWR_LED_SHORT_COUNT;
+volatile uint8_t pwr_led_base_counter = 0;
+volatile uint8_t pwr_led_status_counter = 0;
+volatile uint8_t pwr_led_status = 2;
 
 volatile port_history sense_hist = { 0, 0 };
 volatile master_waiting master_send_waiting = { 0 };
 
-volatile BYTE timeout_err_counter = TIMEOUT_ERR_TIMEOUT;
+volatile uint8_t timeout_err_counter = TIMEOUT_ERR_TIMEOUT;
 
 /** PRIVATE PROTOTYPES ********************************************************/
 
@@ -161,7 +161,7 @@ void YourLowPriorityISRCode();
 void user_init(void);
 void initialize_system(void);
 void init_devices(void);
-BYTE calc_parity(BYTE data);
+uint8_t calc_parity(uint8_t data);
 void check_device_data_to_USB(void);
 
 // USB functions
@@ -169,8 +169,8 @@ void USB_send(void);
 void USB_receive(void);
 void dump_buf_to_USB(ring_generic* buf);
 void USBDeviceTasks(void);
-void parse_command_for_master(BYTE start, BYTE len);
-bool USB_send_master_data(BYTE first, BYTE second, BYTE third);
+void parse_command_for_master(uint8_t start, uint8_t len);
+bool USB_send_master_data(uint8_t first, uint8_t second, uint8_t third);
 void USB_buffer_status(void);
 
 // USART (XpressNET) functions
@@ -488,7 +488,7 @@ void USBCBEP0DataReceived(void) {
 }
 #endif
 
-bool USER_USB_CALLBACK_EVENT_HANDLER(USB_EVENT event, void* pdata, WORD size) {
+bool USER_USB_CALLBACK_EVENT_HANDLER(USB_EVENT event, void* pdata, uint16_t size) {
     USBCDCEventHandler(event, pdata, size);
 
 	switch( (int) event )
@@ -581,7 +581,7 @@ void USART_receive_interrupt(void) {
 	// XOR should be checked in PC.
 
 	static nine_data received = { 0, 0 };
-	BYTE tmp, parity;
+	uint8_t tmp, parity;
 
 	usart_timeout = 0;
 	
@@ -662,7 +662,7 @@ void USART_receive_interrupt(void) {
 // Check for data in ring_USART_datain and send complete data to USB.
 
 void USB_send(void) {
-	BYTE len = msg_len(ring_USART_datain, ring_USART_datain.ptr_b);
+	uint8_t len = msg_len(ring_USART_datain, ring_USART_datain.ptr_b);
 
 	// check for USB ready
 	if (!mUSBUSARTIsTxTrfReady()) return;
@@ -680,9 +680,9 @@ void USB_send(void) {
  */
 
 void USB_receive(void) {
-	static BYTE last_start = 0;
-	BYTE xor, i;
-	BYTE received_len;
+	static uint8_t last_start = 0;
+	uint8_t xor, i;
+	uint8_t received_len;
 	bool parity;
 
 	if ((USBDeviceState < CONFIGURED_STATE) || (USBSuspendControl)) return;
@@ -786,8 +786,8 @@ void USB_receive(void) {
 /* Parse data intended for master.
  */
 
-void parse_command_for_master(BYTE start, BYTE len) {
-	BYTE db1 = ring_USB_datain.data[(start + 2) & ring_USB_datain.max];
+void parse_command_for_master(uint8_t start, uint8_t len) {
+	uint8_t db1 = ring_USB_datain.data[(start + 2) & ring_USB_datain.max];
 
 	if ((db1 >> 4) == 0xA) {
 		// set master status
@@ -843,7 +843,7 @@ void parse_command_for_master(BYTE start, BYTE len) {
  */
 
 void USART_send_next_frame(void) {
-	BYTE ring_length = ringDistance(ring_USB_datain, ring_USB_datain.ptr_b, ring_USB_datain.ptr_e);
+	uint8_t ring_length = ringDistance(ring_USB_datain, ring_USB_datain.ptr_b, ring_USB_datain.ptr_e);
 
 	// check if there is a message from PC to be sent to XpressNET
 	if ((ring_length >= 3) && (ring_length >= msg_len(ring_USB_datain, ring_USB_datain.ptr_b))) {
@@ -960,9 +960,9 @@ void init_devices(void) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-// Calculate parity and return BYTE with the leftmost parity bit (even parity).
-BYTE calc_parity(BYTE data) {
-	BYTE i, result, parity;
+// Calculate parity and return uint8_t with the leftmost parity bit (even parity).
+uint8_t calc_parity(uint8_t data) {
+	uint8_t i, result, parity;
 	parity = 0;
 	result = data;
 	for (i = 0; i < 7; i++) {
@@ -991,7 +991,7 @@ void USART_ni_sent(void) {
 ////////////////////////////////////////////////////////////////////////////////
 
 // Send 3 bytes to USB.
-bool USB_send_master_data(BYTE first, BYTE second, BYTE third) {
+bool USB_send_master_data(uint8_t first, uint8_t second, uint8_t third) {
 	if (mUSBUSARTIsTxTrfReady()) {
 		USB_Out_Buffer[0] = 0xA0;
 		USB_Out_Buffer[1] = first;
@@ -1020,7 +1020,7 @@ bool USB_send_master_data(BYTE first, BYTE second, BYTE third) {
  */
 
 void check_device_data_to_USB(void) {
-	BYTE tmp, my_start;
+	uint8_t tmp, my_start;
 
 	if (master_send_waiting.bits.status) {
 		if (ringFreeSpace(ring_USART_datain) < 4) return;
