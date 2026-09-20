@@ -13,7 +13,7 @@ typedef struct {
     bool ninth;
     bool FERR;
 } nine_data;
-    
+
 void USARTInit(void);
 void USARTWriteByte(bool ninth, uint8_t data);
 nine_data USARTReadByte(void);

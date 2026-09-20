@@ -79,9 +79,9 @@ static inline bool IO_XNPWR_get(void) {
 
 #define IO_SENSE_get()         (!PORTBbits.RB4)
 
-#define IO_HW_VERSION_PORT   PORTCbits.RC7
-#define IO_HW_VERSION_TRIS   TRISC
-#define IO_HW_VERSION_MASK   0x80
+#define IO_HW_VERSION_PORT     PORTCbits.RC7
+#define IO_HW_VERSION_TRIS     TRISC
+#define IO_HW_VERSION_MASK     0x80
 
 static inline void IO_init(void) {
     TRISBbits.TRISB4 = 1;
