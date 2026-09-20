@@ -1,6 +1,8 @@
 #ifndef HARDWARE_PROFILE_H
 #define HARDWARE_PROFILE_H
 
+#include "main.h"
+
 /*******************************************************************/
 /******** USB stack hardware selection options *********************/
 /*******************************************************************/
@@ -48,35 +50,51 @@
 
 /** LEDs ***********************************************************/
 
-#define mInitAllLEDs()       { TRISC &= 0xF8; }
-#define mInitPwrControl()    { TRISCbits.TRISC4 = 0; }
-#define mInitSense()         { TRISBbits.TRISB4 = 1; }
-
 #define mLED_In_LAT          LATCbits.LC0
-#define mLED_Out_LAT         LATCbits.LC1
-#define mLED_PWR_LAT         LATCbits.LC2
-#define XN_PWR_LAT           LATCbits.LC4
-#define mSense               (!PORTBbits.RB4)
-
 #define mLED_In_On()         { mLED_In_LAT = 1; }
-#define mLED_Out_On()        { mLED_Out_LAT = 1; }
-#define mLED_Pwr_On()        { mLED_PWR_LAT = 1; }
-#define XN_Pwr_On()          { XN_PWR_LAT = 1; }
-
 #define mLED_In_Off()        { mLED_In_LAT = 0; }
-#define mLED_Out_Off()       { mLED_Out_LAT = 0; }
-#define mLED_Pwr_Off()       { mLED_PWR_LAT = 0; }
-#define XN_Pwr_Off()         { XN_PWR_LAT = 0; }
-
 #define mLED_In_Toggle()     { mLED_In_LAT = !mLED_In_LAT; }
+
+#define mLED_Out_LAT         LATCbits.LC1
+#define mLED_Out_On()        { mLED_Out_LAT = 1; }
+#define mLED_Out_Off()       { mLED_Out_LAT = 0; }
 #define mLED_Out_Toggle()    { mLED_Out_LAT = !mLED_Out_LAT; }
+
+#define mLED_PWR_LAT         LATCbits.LC2
+#define mLED_Pwr_On()        { mLED_PWR_LAT = 1; }
+#define mLED_Pwr_Off()       { mLED_PWR_LAT = 0; }
 #define mLED_Pwr_Toggle()    { mLED_PWR_LAT = !mLED_PWR_LAT; }
-#define XN_Pwr_Toggle()      { XN_PWR_LAT = !XN_PWR_LAT; }
 
 /** IO ************************************************************/
+
+#define IO_XNPWR_LAT         LATCbits.LC4
+
+static inline void IO_XNPWR_set(bool value) {
+    IO_XNPWR_LAT = (value ^ (version_hw == VERSION_HW_5));
+}
+
+static inline bool IO_XNPWR_get(void) {
+    return (IO_XNPWR_LAT ^ (version_hw == VERSION_HW_5));
+}
+
+#define mSense               (!PORTBbits.RB4)
 
 #define IO_HW_VERSION_PORT   PORTCbits.RC7
 #define IO_HW_VERSION_TRIS   TRISC
 #define IO_HW_VERSION_MASK   0x80
+
+static inline void IO_init(void) {
+    TRISBbits.TRISB4 = 1;
+    
+    TRISCbits.TRISC0 = 0;
+    TRISCbits.TRISC1 = 0;
+    TRISCbits.TRISC2 = 0;
+    TRISCbits.TRISC4 = 0;
+
+    IO_XNPWR_set(false);
+  	mLED_Pwr_On();
+	mLED_In_On();
+	mLED_Out_On();
+}
 
 #endif  //HARDWARE_PROFILE_H

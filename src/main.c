@@ -28,13 +28,13 @@
 #define USB_last_message_len    ringDistance(ring_USB_datain, last_start, ring_USB_datain.ptr_e)
 #define USART_last_message_len  ringDistance(ring_USART_datain, USART_last_start, ring_USART_datain.ptr_e)
 
-#define RESET_BUS               current_dev.reacted = false; \
-                                current_dev.timeout = 1;     \
-                                current_dev.index = 1;       \
-                                active_devices = 0;          \
-                                dirty_devices = 0;           \
-                                RCSTAbits.CREN = 0;          \
-                                PIE1bits.RCIE = 0;
+#define RESET_BUS               { current_dev.reacted = false; \
+                                  current_dev.timeout = 1;     \
+                                  current_dev.index = 1;       \
+                                  active_devices = 0;          \
+                                  dirty_devices = 0;           \
+                                  RCSTAbits.CREN = 0;          \
+                                  PIE1bits.RCIE = 0; }
 
 #define IsRACKRound             (current_dev.round == ROUND_RACK)
 
@@ -191,7 +191,7 @@ void main(void) {
 		// Normal inquiry answer timeout.
 		// This function is not placed in interrupt to serve interrupt as
 		// fast as possible.
-		if ((current_dev.timeout >= NI_TIMEOUT) && (XN_PWR_PORT) && (sense_hist.state)) {
+		if ((current_dev.timeout >= NI_TIMEOUT) && (IO_XNPWR_get()) && (sense_hist.state)) {
 			// device did not answer in 120 us
 
 #ifdef RACK_ENABLE
@@ -247,6 +247,8 @@ void init(void) {
 	ADCON1 |= 0x0F; // Default all pins to digital
 #endif
 
+	version_hw = detect_hw_version();
+    
     // init ring buffers
 	ringBufferInit(ring_USB_datain, 32);
 	ringBufferInit(ring_USART_datain, 32);
@@ -258,15 +260,8 @@ void init(void) {
 	// enable PORTA and PORTB pull-ups (because of USART reading)
 	INTCON2bits.RABPU = 0;
 
-	// Initialize all of the LED pins
-	mInitAllLEDs();
-	mLED_Pwr_On();
-	mLED_In_On();
-	mLED_Out_On();
-
-	mInitPwrControl();
-	XN_Pwr_Off();
-	mInitSense();
+	// Initialize all GPIO
+	IO_init();
 
 	// setup timer2 on 100 us
 	T2CONbits.T2CKPS = 0b01; // prescaler 4x
@@ -281,8 +276,6 @@ void init(void) {
 	init_devices();
 	USBDeviceInit();
 	USARTInit();
-
-	version_hw = detect_hw_version();
     
   	INTCONbits.GIEL = 1;        // Enable low-level interrupts
 	INTCONbits.GIEH = 1;        // Enable high-level interrupts
@@ -307,7 +300,7 @@ void timer_10ms(void) {
         keep_alive.receive_timer++;
         if (keep_alive.receive_timer == KA_RECEIVE_MAX) {
             // computer crashed -> turn the bus off
-            XN_Pwr_Off();
+            IO_XNPWR_set(false);
             RESET_BUS;
             keep_alive.receive_timer = 0;
             keep_alive.receive = false;
@@ -652,7 +645,7 @@ void USB_receive(void) {
 					return;
 				}
 
-				if (!XN_PWR_PORT) {
+				if (!IO_XNPWR_get()) {
 					ringRemoveFromMiddle((ring_generic*)&ring_USB_datain, last_start, msg_len(ring_USB_datain, last_start));
 					USB_send_master_data(0x01, 0x0A, 0x0B);
 					return;
@@ -681,17 +674,19 @@ void parse_command_for_master(uint8_t start, uint8_t len) {
 
 	if ((db1 >> 4) == 0xA) {
 		// set master status
-		XN_PWR_PORT = !(db1 & 0b1);
-		RCSTAbits.CREN = (db1 & 0b1);
-		PIE1bits.RCIE = (db1 & 0b1);
-		if (!RCSTAbits.CREN) { RESET_BUS; }
+        const bool xnPwr = db1 & 0b1;
+		IO_XNPWR_set(xnPwr);
+		RCSTAbits.CREN = xnPwr;
+		PIE1bits.RCIE = xnPwr;
+		if (!xnPwr)
+            RESET_BUS;
 		keep_alive.send = ((db1 >> 3) & 0b1);
 		keep_alive.receive = ((db1 >> 2) & 0b1);
 		keep_alive.receive_timer = 0;
 		keep_alive.send_timer = 0;
 		master_send_waiting.bits.status = true;
 	} else if (db1 == 0xA2) {
-		// tansistor status request
+		// transistor status request
 		master_send_waiting.bits.status = true;
 	} else if (db1 == 0x80) {
 		// version request
@@ -918,7 +913,7 @@ void check_device_data_to_USB(void) {
 		my_start = ring_USART_datain.ptr_e;
 		ring_USART_datain.ptr_e = (ring_USART_datain.ptr_e + 4) & ring_USART_datain.max;
 
-		tmp = (uint8_t)(0xA0 + XN_PWR_PORT + (sense_hist.state << 1) + ((keep_alive.receive & 0b1) << 2) + ((keep_alive.send & 0b1) << 3));
+		tmp = (uint8_t)(0xA0 + IO_XNPWR_get() + (sense_hist.state << 1) + ((keep_alive.receive & 0b1) << 2) + ((keep_alive.send & 0b1) << 3));
 		ring_USART_datain.data[my_start] = 0xA0;
 		ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = 0x11;
 		ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = tmp;
