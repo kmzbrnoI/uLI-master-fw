@@ -855,8 +855,8 @@ void check_device_data_to_USB(void) {
 
     } else if (master_send_waiting.bits.usart_incoming_timeout) {
         master_send_waiting.bits.usart_incoming_timeout = false;
-        USB_Out_Buffer[2] = 0x03;
-        USB_Out_Buffer[3] = 0x02;
+        USB_Out_Buffer[2] = 0x02;
+        USB_Out_Buffer[3] = 0x03;
         putUSBUSART(USB_Out_Buffer, 4);
 
     } else if (master_send_waiting.bits.ok) {
