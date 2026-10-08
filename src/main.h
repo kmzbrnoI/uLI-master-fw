@@ -35,11 +35,20 @@ typedef struct {
 
 typedef union {
     struct {
-        bool status : 1;
-        bool active_devices : 1;
+        bool usb_incoming_timeout : 1;
+        bool usart_incoming_timeout : 1;
+        bool ok : 1;
         bool keep_alive : 1;
+        bool usb_usart_overflow : 1;
+        bool usb_xor_error : 1;
+        bool usb_parity_error : 1;
+        bool xn_no_power : 1;
+        bool xn_transistor_closed : 1;
+        bool status : 1;
+        bool version : 1;
+        bool active_devices : 1;
     } bits;
-    uint8_t all;
+    uint16_t all;
 } master_waiting;
 
 #define KA_RECEIVE_MAX      500 // 5 s = keep-alive receive timeout

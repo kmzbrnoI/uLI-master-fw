@@ -105,7 +105,6 @@ static void USB_send(void);
 static void USB_receive(void);
 static void dump_buf_to_USB(ring_generic* buf);
 static void parse_command_for_master(uint8_t start, uint8_t len);
-static bool USB_send_master_data(uint8_t first, uint8_t second, uint8_t third);
 static void USB_buffer_status(void);
 
 // USART (XpressNET) functions
@@ -417,7 +416,7 @@ void USART_check_timeouts(void) {
         // inform PC about timeout
         if (timeout_err_counter == TIMEOUT_ERR_TIMEOUT) {
             timeout_err_counter = 0;
-            USB_send_master_data(0x01, 0x02, 0x03);
+            master_send_waiting.bits.usart_incoming_timeout = true;
         }
 
         // send next message to XpressNET
@@ -523,7 +522,7 @@ void USB_send(void) {
 
     // check for USB ready
     if (!mUSBUSARTIsTxTrfReady())
-		return;
+        return;
 
     uint8_t len = msg_len(ring_USART_datain, ring_USART_datain.ptr_b);
 
@@ -557,10 +556,7 @@ void USB_receive(void) {
             ring_USB_datain.ptr_e = last_start;
             if (ring_USB_datain.ptr_b == ring_USB_datain.ptr_e)
                 ring_USART_datain.empty = true;
-
-            // inform PC about full buffer
-            USB_send_master_data(0x01, 0x06, 0x07);
-
+            master_send_waiting.bits.usb_usart_overflow = true;
             return;
         }
 
@@ -571,9 +567,7 @@ void USB_receive(void) {
                 ring_USB_datain.ptr_e = last_start;
                 usb_timeout = 0;
                 if (ring_USB_datain.ptr_e == ring_USB_datain.ptr_b) ring_USB_datain.empty = true;
-
-                // inform PC about timeout
-                USB_send_master_data(0x01, 0x01, 0x00);
+                master_send_waiting.bits.usb_incoming_timeout = true;
             }
             return;
         }
@@ -597,7 +591,7 @@ void USB_receive(void) {
             if (parity != 0) {
                 // parity error
                 ringRemoveFromMiddle((ring_generic*)&ring_USB_datain, last_start, msg_len(ring_USB_datain, last_start));
-                USB_send_master_data(0x01, 0x08, 0x09);
+                master_send_waiting.bits.usb_parity_error = true;
                 return;
             }
 
@@ -610,7 +604,7 @@ void USB_receive(void) {
                 // xor error
                 // delete content in the middle of ring buffer
                 ringRemoveFromMiddle((ring_generic*)&ring_USB_datain, last_start, msg_len(ring_USB_datain, last_start));
-                USB_send_master_data(0x01, 0x07, 0x06);
+                master_send_waiting.bits.usb_xor_error = true;
                 return;
             }
 
@@ -624,13 +618,13 @@ void USB_receive(void) {
             } else {
                 if (!sense_hist.state) {
                     ringRemoveFromMiddle((ring_generic*)&ring_USB_datain, last_start, msg_len(ring_USB_datain, last_start));
-                    USB_send_master_data(0x01, 0x09, 0x08);
+                    master_send_waiting.bits.xn_no_power = true;
                     return;
                 }
 
                 if (!IO_XNPWR_get()) {
                     ringRemoveFromMiddle((ring_generic*)&ring_USB_datain, last_start, msg_len(ring_USB_datain, last_start));
-                    USB_send_master_data(0x01, 0x0A, 0x0B);
+                    master_send_waiting.bits.xn_transistor_closed = true;
                     return;
                 }
 
@@ -674,24 +668,10 @@ void parse_command_for_master(uint8_t start, uint8_t len) {
         master_send_waiting.bits.status = true;
     } else if (db1 == 0x80) {
         // version request
-        if (mUSBUSARTIsTxTrfReady()) {
-            USB_Out_Buffer[0] = 0xA0;
-            USB_Out_Buffer[1] = 0x13;
-            USB_Out_Buffer[2] = 0x80;
-            USB_Out_Buffer[3] = version_hw;
-            USB_Out_Buffer[4] = VERSION_SW;
-            USB_Out_Buffer[5] = USB_Out_Buffer[1] ^ USB_Out_Buffer[2] ^ USB_Out_Buffer[3] ^ USB_Out_Buffer[4];
-            putUSBUSART(USB_Out_Buffer, 6);
-        }
+        master_send_waiting.bits.version = true;
     } else if (db1 == 0x81) {
         // response request
-        if (mUSBUSARTIsTxTrfReady()) {
-            USB_Out_Buffer[0] = 0xA0;
-            USB_Out_Buffer[1] = 0x01;
-            USB_Out_Buffer[2] = 0x04;
-            USB_Out_Buffer[3] = 0x05;
-            putUSBUSART(USB_Out_Buffer, 4);
-        }
+        master_send_waiting.bits.ok = true;
     } else if (db1 == 0x82) {
         // active device list request
         master_send_waiting.bits.active_devices = true;
@@ -857,59 +837,95 @@ void USART_ni_sent(void) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-
-// Send 3 bytes to USB.
-bool USB_send_master_data(uint8_t first, uint8_t second, uint8_t third) {
-    if (mUSBUSARTIsTxTrfReady()) {
-        USB_Out_Buffer[0] = 0xA0;
-        USB_Out_Buffer[1] = first;
-        USB_Out_Buffer[2] = second;
-        USB_Out_Buffer[3] = third;
-        putUSBUSART(USB_Out_Buffer, 4);
-        return true;
-    } else {
-        return false;
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////
 /* Send data from uLI-master to PC (not from XpressNET devices).
  */
 
 void check_device_data_to_USB(void) {
-	if (!mUSBUSARTIsTxTrfReady())
-		return;
+    if (!mUSBUSARTIsTxTrfReady())
+        return;
 
-    if (master_send_waiting.bits.status) {
+    USB_Out_Buffer[0] = 0xA0;
+    USB_Out_Buffer[1] = 0x01;
+
+    if (master_send_waiting.bits.usb_incoming_timeout) {
+        master_send_waiting.bits.usb_incoming_timeout = false;
+        USB_Out_Buffer[2] = 0x01;
+        USB_Out_Buffer[3] = 0x00;
+        putUSBUSART(USB_Out_Buffer, 4);
+
+    } else if (master_send_waiting.bits.usart_incoming_timeout) {
+        master_send_waiting.bits.usart_incoming_timeout = false;
+        USB_Out_Buffer[2] = 0x03;
+        USB_Out_Buffer[3] = 0x03;
+        putUSBUSART(USB_Out_Buffer, 4);
+
+    } else if (master_send_waiting.bits.ok) {
+        USB_Out_Buffer[2] = 0x04;
+        USB_Out_Buffer[3] = 0x05;
+        putUSBUSART(USB_Out_Buffer, 4);
+
+    } else if (master_send_waiting.bits.keep_alive) {
+        master_send_waiting.bits.keep_alive = false;
+        USB_Out_Buffer[2] = 0x05;
+        USB_Out_Buffer[3] = 0x04;
+        putUSBUSART(USB_Out_Buffer, 4);
+
+    } else if (master_send_waiting.bits.usb_usart_overflow) {
+        master_send_waiting.bits.usb_usart_overflow = false;
+        USB_Out_Buffer[2] = 0x06;
+        USB_Out_Buffer[3] = 0x07;
+        putUSBUSART(USB_Out_Buffer, 4);
+
+    } else if (master_send_waiting.bits.usb_xor_error) {
+        master_send_waiting.bits.usb_xor_error = false;
+        USB_Out_Buffer[2] = 0x07;
+        USB_Out_Buffer[3] = 0x06;
+        putUSBUSART(USB_Out_Buffer, 4);
+
+    } else if (master_send_waiting.bits.usb_parity_error) {
+        master_send_waiting.bits.usb_parity_error = false;
+        USB_Out_Buffer[2] = 0x08;
+        USB_Out_Buffer[3] = 0x09;
+        putUSBUSART(USB_Out_Buffer, 4);
+
+    } else if (master_send_waiting.bits.xn_no_power) {
+        master_send_waiting.bits.xn_no_power = false;
+        USB_Out_Buffer[2] = 0x09;
+        USB_Out_Buffer[3] = 0x08;
+        putUSBUSART(USB_Out_Buffer, 4);
+
+    } else if (master_send_waiting.bits.xn_transistor_closed) {
+        master_send_waiting.bits.xn_transistor_closed = false;
+        USB_Out_Buffer[2] = 0x0A;
+        USB_Out_Buffer[3] = 0x0B;
+        putUSBUSART(USB_Out_Buffer, 4);
+
+    } else if (master_send_waiting.bits.status) {
         master_send_waiting.bits.status = false;
-
-        USB_Out_Buffer[0] = 0xA0;
         USB_Out_Buffer[1] = 0x11;
         USB_Out_Buffer[2] = (uint8_t)(0xA0 + IO_XNPWR_get() + (sense_hist.state << 1) + ((keep_alive.receive & 0b1) << 2) + ((keep_alive.send & 0b1) << 3));
         USB_Out_Buffer[3] = xor(USB_Out_Buffer+1, 2);
         putUSBUSART(USB_Out_Buffer, 4);
 
+    } else if (master_send_waiting.bits.version) {
+        master_send_waiting.bits.version = false;
+        USB_Out_Buffer[1] = 0x13;
+        USB_Out_Buffer[2] = 0x80;
+        USB_Out_Buffer[3] = version_hw;
+        USB_Out_Buffer[4] = VERSION_SW;
+        USB_Out_Buffer[5] = xor(USB_Out_Buffer+1, 4);
+        putUSBUSART(USB_Out_Buffer, 6);
+
     } else if (master_send_waiting.bits.active_devices) {
         master_send_waiting.bits.active_devices = false;
-
-		USB_Out_Buffer[0] = 0xA0;
         USB_Out_Buffer[1] = 0x15;
         USB_Out_Buffer[2] = 0x82;
         USB_Out_Buffer[3] = active_devices >> 24;
         USB_Out_Buffer[4] = (active_devices >> 16) & 0xFF;
         USB_Out_Buffer[5] = (active_devices >> 8) & 0xFF;
         USB_Out_Buffer[6] = active_devices & 0xFF;
-        USB_Out_Buffer[7] =  xor(USB_Out_Buffer+1, 6);
-		putUSBUSART(USB_Out_Buffer, 8);
-
-    } else if (master_send_waiting.bits.keep_alive) {
-		master_send_waiting.bits.keep_alive = false;
-
-        USB_Out_Buffer[0] = 0xA0;
-        USB_Out_Buffer[1] = 0x01;
-        USB_Out_Buffer[2] = 0x05;
-        USB_Out_Buffer[3] = 0x04;
-		putUSBUSART(USB_Out_Buffer, 4);
+        USB_Out_Buffer[7] = xor(USB_Out_Buffer+1, 6);
+        putUSBUSART(USB_Out_Buffer, 8);
     }
 }
 
@@ -941,8 +957,8 @@ void resetBus(void) {
 ////////////////////////////////////////////////////////////////////////////////
 
 uint8_t xor(const uint8_t data[], uint8_t len) {
-	uint8_t xor = 0;
-	for (uint8_t i = 0; i < len; i++)
-		xor ^= data[i];
-	return xor;
+    uint8_t xor = 0;
+    for (uint8_t i = 0; i < len; i++)
+        xor ^= data[i];
+    return xor;
 }
