@@ -98,6 +98,7 @@ static void check_device_data_to_USB(void);
 static void timer_10ms(void);
 static uint8_t detect_hw_version(void);
 static void resetBus(void);
+static uint8_t xor(const uint8_t data[], uint8_t len);
 
 // USB functions
 static void USB_send(void);
@@ -213,17 +214,6 @@ void main(void) {
         USB_send();
         USART_check_timeouts();
         CDCTxService();
-
-        if ((master_send_waiting.all) && (USART_last_start == ring_USART_datain.ptr_e)
-            && (!current_dev.reacted)) {
-            // Data are not being received -> check output buffers.
-            /* The `reacted` part of if is important -- it ensures this part
-             * of code is not called in case of potential interrupt in next few
-             * microseconds. This is important for check_device_data_to_USB func.
-             */
-            check_device_data_to_USB();
-            USART_last_start = ring_USART_datain.ptr_e;
-        }
 
         // clear watchdog timer
         ClrWdt();
@@ -528,10 +518,14 @@ void USART_receive_interrupt(void) {
 // Check for data in ring_USART_datain and send complete data to USB.
 
 void USB_send(void) {
-    uint8_t len = msg_len(ring_USART_datain, ring_USART_datain.ptr_b);
+    if (master_send_waiting.all > 0)
+        check_device_data_to_USB();
 
     // check for USB ready
-    if (!mUSBUSARTIsTxTrfReady()) return;
+    if (!mUSBUSARTIsTxTrfReady())
+		return;
+
+    uint8_t len = msg_len(ring_USART_datain, ring_USART_datain.ptr_b);
 
     if (((ringLength(ring_USART_datain)) >= 3) && (ringLength(ring_USART_datain) >= len)) {
         // send message
@@ -879,63 +873,43 @@ bool USB_send_master_data(uint8_t first, uint8_t second, uint8_t third) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/* This function is called periodically when no data are being received
- * to USART_input buffer.
- * Notice: this function must move ring_USART_datain.ptr_e before actually
- * adding data to ring_USART_datain or make addition of ALL data to buffer
- * atomic at once. Because at every time, this functon could be interrupted
- * by USART_receive_interrupt function, which also uses ring_USART_datain buffer.
- * It is important to keep these two functions in symbiosis.
- * Reality: when interrupt comes between lines `my_start = ...` and the next line,
- * there will be a huge problem. We cannot solve this problem simply. So, when
- * this function is called, it is 99.9999 % sure that this function will NOT
- * be interrupted. To increase the probability, this function should be as
- * fast as possible.
+/* Send data from uLI-master to PC (not from XpressNET devices).
  */
 
 void check_device_data_to_USB(void) {
-    uint8_t tmp, my_start;
+	if (!mUSBUSARTIsTxTrfReady())
+		return;
 
     if (master_send_waiting.bits.status) {
-        if (ringFreeSpace(ring_USART_datain) < 4) return;
         master_send_waiting.bits.status = false;
-        my_start = ring_USART_datain.ptr_e;
-        ring_USART_datain.ptr_e = (ring_USART_datain.ptr_e + 4) & ring_USART_datain.max;
 
-        tmp = (uint8_t)(0xA0 + IO_XNPWR_get() + (sense_hist.state << 1) + ((keep_alive.receive & 0b1) << 2) + ((keep_alive.send & 0b1) << 3));
-        ring_USART_datain.data[my_start] = 0xA0;
-        ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = 0x11;
-        ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = tmp;
-        ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = 0x11 ^ tmp;
+        USB_Out_Buffer[0] = 0xA0;
+        USB_Out_Buffer[1] = 0x11;
+        USB_Out_Buffer[2] = (uint8_t)(0xA0 + IO_XNPWR_get() + (sense_hist.state << 1) + ((keep_alive.receive & 0b1) << 2) + ((keep_alive.send & 0b1) << 3));
+        USB_Out_Buffer[3] = xor(USB_Out_Buffer+1, 2);
+        putUSBUSART(USB_Out_Buffer, 4);
 
     } else if (master_send_waiting.bits.active_devices) {
-        if (ringFreeSpace(ring_USART_datain) < 8) return;
         master_send_waiting.bits.active_devices = false;
-        my_start = ring_USART_datain.ptr_e;
-        ring_USART_datain.ptr_e = (ring_USART_datain.ptr_e + 8) & ring_USART_datain.max;
 
-        ring_USART_datain.data[my_start] = 0xA0;
-        ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = 0x15;
-        ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = 0x82;
-        ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = active_devices >> 24;
-        ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = (active_devices >> 16) & 0xFF;
-        ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = (active_devices >> 8) & 0xFF;
-        ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = active_devices & 0xFF;
-
-        ring_USART_datain.data[(++my_start) & ring_USART_datain.max] =  0x97 ^
-            (active_devices >> 24)  ^ ((active_devices >> 16) & 0xFF) ^
-            (active_devices >> 8) & 0xFF ^ (active_devices & 0xFF);
+		USB_Out_Buffer[0] = 0xA0;
+        USB_Out_Buffer[1] = 0x15;
+        USB_Out_Buffer[2] = 0x82;
+        USB_Out_Buffer[3] = active_devices >> 24;
+        USB_Out_Buffer[4] = (active_devices >> 16) & 0xFF;
+        USB_Out_Buffer[5] = (active_devices >> 8) & 0xFF;
+        USB_Out_Buffer[6] = active_devices & 0xFF;
+        USB_Out_Buffer[7] =  xor(USB_Out_Buffer+1, 6);
+		putUSBUSART(USB_Out_Buffer, 8);
 
     } else if (master_send_waiting.bits.keep_alive) {
-        if (ringFreeSpace(ring_USART_datain) < 4) return;
-        master_send_waiting.bits.keep_alive = false;
-        my_start = ring_USART_datain.ptr_e;
-        ring_USART_datain.ptr_e = (ring_USART_datain.ptr_e + 4) & ring_USART_datain.max;
+		master_send_waiting.bits.keep_alive = false;
 
-        ring_USART_datain.data[my_start] = 0xA0;
-        ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = 0x01;
-        ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = 0x05;
-        ring_USART_datain.data[(++my_start) & ring_USART_datain.max] = 0x04;
+        USB_Out_Buffer[0] = 0xA0;
+        USB_Out_Buffer[1] = 0x01;
+        USB_Out_Buffer[2] = 0x05;
+        USB_Out_Buffer[3] = 0x04;
+		putUSBUSART(USB_Out_Buffer, 4);
     }
 }
 
@@ -965,3 +939,10 @@ void resetBus(void) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+
+uint8_t xor(const uint8_t data[], uint8_t len) {
+	uint8_t xor = 0;
+	for (uint8_t i = 0; i < len; i++)
+		xor ^= data[i];
+	return xor;
+}
