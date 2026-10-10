@@ -45,6 +45,7 @@ typedef union {
         bool xn_no_power : 1;
         bool xn_transistor_closed : 1;
         bool missed_timer : 1;
+        bool ferr : 1;
         bool status : 1;
         bool version : 1;
         bool active_devices : 1;

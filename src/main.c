@@ -34,7 +34,6 @@
 
 #define PWR_LED_SHORT_COUNT     15 // 150 ms
 #define PWR_LED_LONG_COUNT      40 // 400 ms
-#define PWR_LED_FERR_COUNT      10 // status led indicates >10 framing errors
 
 #define TIMEOUT_ERR_TIMEOUT     20 // 200 ms
 
@@ -480,10 +479,13 @@ void USART_receive_interrupt(void) {
     // XOR should be checked in PC.
 
     static nine_data received = { 0, 0 };
-
     usart_timeout = 0;
-
     received = USARTReadByte();
+
+	if (received.FERR) {
+		master_send_waiting.bits.ferr = true;
+		return;
+	}
 
     if (current_dev.finished) {
         // next byte was received after the end of message -> probably
@@ -886,6 +888,12 @@ void check_device_data_to_USB(void) {
         master_send_waiting.bits.missed_timer = false;
         USB_Out_Buffer[4] = 0x0B;
         USB_Out_Buffer[5] = 0x0A;
+        putUSBUSART(USB_Out_Buffer, 6);
+
+    } else if (master_send_waiting.bits.ferr) {
+        master_send_waiting.bits.ferr = false;
+        USB_Out_Buffer[4] = 0x0C;
+        USB_Out_Buffer[5] = 0x0D;
         putUSBUSART(USB_Out_Buffer, 6);
 
     } else if (master_send_waiting.bits.status) {
