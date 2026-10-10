@@ -61,3 +61,9 @@ void ringClear(volatile ring_generic* buf) {
     buf->ptr_b = buf->ptr_e;
     buf->empty = true;
 }
+
+void ringRewindEnd(volatile ring_generic* buf, uint8_t end) {
+	buf->ptr_e = end;
+	if (buf->ptr_e == buf->ptr_b)
+		buf->empty = true;
+}

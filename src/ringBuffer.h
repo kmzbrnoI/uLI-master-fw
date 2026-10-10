@@ -34,6 +34,7 @@ void ringSerialize(volatile ring_generic* buf, uint8_t* out, uint8_t start, uint
 void ringRemoveFromMiddle(volatile ring_generic* buf, uint8_t start, uint8_t length);
 void ringClear(volatile ring_generic* buf);
 void ringAddToStart(volatile ring_generic* buf, uint8_t* data, uint8_t len);
+void ringRewindEnd(volatile ring_generic* buf, uint8_t end); // rewind buf->ptr_e back to 'end'
 
 #define ringBufferInit(name, size) { \
     name.max = (size - 1);     \

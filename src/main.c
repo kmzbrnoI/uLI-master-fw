@@ -408,8 +408,7 @@ void USART_check_timeouts(void) {
         PIE1bits.RCIE = 0;
 
         // delete last incoming message and wait for next message
-        ring_USART_datain.ptr_e = USART_last_start;
-        if (ring_USART_datain.ptr_e == ring_USART_datain.ptr_b) ring_USART_datain.empty = true;
+		ringRewindEnd(&ring_USART_datain, USART_last_start);
         usart_timeout = 0;
         current_dev.reacted = false;
 
@@ -463,8 +462,7 @@ void USART_receive_interrupt(void) {
 
     if (ringFreeSpace(ring_USART_datain) < 2) {
         // reset buffer and wait for next message
-        ring_USART_datain.ptr_e = USART_last_start;
-        if (ring_USART_datain.ptr_e == ring_USART_datain.ptr_b) ring_USART_datain.empty = true;
+		ringRewindEnd(&ring_USART_datain, USART_last_start);
         return;
     }
 
@@ -489,8 +487,7 @@ void USART_receive_interrupt(void) {
     if (USART_last_message_len >= msg_len(ring_USART_datain, USART_last_start)) {
 #ifdef RACK_ENABLE
         if (IsRACKRound) {
-            ring_USART_datain.ptr_e = USART_last_start;
-            if (ring_USART_datain.ptr_e == ring_USART_datain.ptr_b) ring_USART_datain.empty = true;
+			ringRewind(ring_USART_datain, USART_last_start);
         } else {
             USART_last_start = ring_USART_datain.ptr_e;
         }
@@ -553,9 +550,7 @@ void USB_receive(void) {
         // ring_USB_datain overflow check
         if (ringFull(ring_USB_datain)) {
             // delete last message
-            ring_USB_datain.ptr_e = last_start;
-            if (ring_USB_datain.ptr_b == ring_USB_datain.ptr_e)
-                ring_USART_datain.empty = true;
+			ringRewindEnd(&ring_USB_datain, last_start);
             master_send_waiting.bits.usb_usart_overflow = true;
             return;
         }
@@ -564,10 +559,9 @@ void USB_receive(void) {
         if (received_len == 0) {
             // check for timeout
             if ((usb_timeout >= USB_MAX_TIMEOUT) && (last_start != ring_USB_datain.ptr_e)) {
-                ring_USB_datain.ptr_e = last_start;
-                usb_timeout = 0;
-                if (ring_USB_datain.ptr_e == ring_USB_datain.ptr_b) ring_USB_datain.empty = true;
+				ringRewindEnd(&ring_USB_datain, last_start);
                 master_send_waiting.bits.usb_incoming_timeout = true;
+                usb_timeout = 0;
             }
             return;
         }
@@ -724,7 +718,8 @@ void USART_send_rest_of_message(void) {
         // last byte sending
 
         ring_USB_datain.ptr_b = usart_to_send; // whole message sent
-        if (ring_USB_datain.ptr_b == ring_USB_datain.ptr_e) { ring_USB_datain.empty = true; }
+        if (ring_USB_datain.ptr_b == ring_USB_datain.ptr_e)
+			ring_USB_datain.empty = true;
 
         sent_callback = &(USART_request_next_device);
         usart_last_byte_sent = 1;
