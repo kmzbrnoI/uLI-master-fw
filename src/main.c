@@ -18,10 +18,10 @@
 
 /** DEFINES *******************************************************************/
 
-#define msg_len(buf,start)      (((buf).data[((start) + 1) & (buf).max] & 0x0F)+3)
+#define msg_len(buf,start)      (((buf).data[((start) + 1) % RINGBUF_SIZE] & 0x0F)+3)
 
-#define USB_last_message_len    ringDistance(ring_USB_datain, last_start, ring_USB_datain.ptr_e)
-#define USART_last_message_len  ringDistance(ring_USART_datain, USART_last_start, ring_USART_datain.ptr_e)
+#define USB_last_message_len    ringDistance(&ring_USB_datain, last_start, ring_USB_datain.ptr_e)
+#define USART_last_message_len  ringDistance(&ring_USART_datain, USART_last_start, ring_USART_datain.ptr_e)
 
 #define IsRACKRound             (current_dev.round == ROUND_RACK)
 
@@ -225,8 +225,8 @@ void init(void) {
 #endif
 
     // init ring buffers
-    ringBufferInit(ring_USB_datain, 32);
-    ringBufferInit(ring_USART_datain, 32);
+    ringInit(&ring_USB_datain);
+    ringInit(&ring_USART_datain);
 
     // switch off AD convertors (USART is not working when not switched off manually)
     ANSEL = 0x00;
@@ -356,8 +356,8 @@ bool USER_USB_CALLBACK_EVENT_HANDLER(USB_EVENT event, void* pdata, uint16_t size
 
         case EVENT_SUSPEND:
             IO_LED_Out_On();
-            ringClear(&ring_USART_datain);
-            ringClear(&ring_USB_datain);
+            ringInit(&ring_USART_datain);
+            ringInit(&ring_USB_datain);
             break;
 
         case EVENT_RESUME:
@@ -460,7 +460,7 @@ void USART_receive_interrupt(void) {
     dirty_devices &= ~((uint32_t)1 << current_dev.index);
 #endif
 
-    if (ringFreeSpace(ring_USART_datain) < 2) {
+    if (ringFreeSpace(&ring_USART_datain) < 2) {
         // reset buffer and wait for next message
 		ringRewindEnd(&ring_USART_datain, USART_last_start);
         return;
@@ -523,7 +523,7 @@ void USB_send(void) {
 
     uint8_t len = msg_len(ring_USART_datain, ring_USART_datain.ptr_b);
 
-    if (((ringLength(ring_USART_datain)) >= 3) && (ringLength(ring_USART_datain) >= len)) {
+    if (((ringLength(&ring_USART_datain)) >= 3) && (ringLength(&ring_USART_datain) >= len)) {
         // send message
         ringSerialize(&ring_USART_datain, USB_Out_Buffer, ring_USART_datain.ptr_b, len);
         putUSBUSART(USB_Out_Buffer, len);
@@ -548,14 +548,14 @@ void USB_receive(void) {
 
     if (mUSBUSARTIsTxTrfReady()) {
         // ring_USB_datain overflow check
-        if (ringFull(ring_USB_datain)) {
+        if (ringFull(&ring_USB_datain)) {
             // delete last message
 			ringRewindEnd(&ring_USB_datain, last_start);
             master_send_waiting.bits.usb_usart_overflow = true;
             return;
         }
 
-        uint8_t received_len = getsUSBUSART((ring_generic*)&ring_USB_datain, ringFreeSpace(ring_USB_datain));
+        uint8_t received_len = getsUSBUSART((ring_generic*)&ring_USB_datain, ringFreeSpace(&ring_USB_datain));
         if (received_len == 0) {
             // check for timeout
             if ((usb_timeout >= USB_MAX_TIMEOUT) && (last_start != ring_USB_datain.ptr_e)) {
@@ -572,7 +572,7 @@ void USB_receive(void) {
         // data received -> parse data
         // at least 3 bytes must be in buffer to start parsing
         // (call byte + header byte + xor)
-        while ((ringDistance(ring_USB_datain, last_start, ring_USB_datain.ptr_e) >= 3)
+        while ((ringDistance(&ring_USB_datain, last_start, ring_USB_datain.ptr_e) >= 3)
             && (USB_last_message_len >= msg_len(ring_USB_datain, last_start))) {
             // while message received
 
@@ -584,7 +584,7 @@ void USB_receive(void) {
 
             if (parity != 0) {
                 // parity error
-                ringRemoveFromMiddle((ring_generic*)&ring_USB_datain, last_start, msg_len(ring_USB_datain, last_start));
+				ringRewindEnd(&ring_USB_datain, last_start);
                 master_send_waiting.bits.usb_parity_error = true;
                 return;
             }
@@ -592,12 +592,11 @@ void USB_receive(void) {
             // check xor
             uint8_t xor = 0;
             for (uint8_t i = 0; i < msg_len(ring_USB_datain, last_start) - 1; i++)
-                xor ^= ring_USB_datain.data[(i + last_start + 1) & ring_USB_datain.max];
+                xor ^= ring_USB_datain.data[(i + last_start + 1) % RINGBUF_SIZE];
 
             if (xor != 0) {
                 // xor error
-                // delete content in the middle of ring buffer
-                ringRemoveFromMiddle((ring_generic*)&ring_USB_datain, last_start, msg_len(ring_USB_datain, last_start));
+				ringRewindEnd(&ring_USB_datain, last_start);
                 master_send_waiting.bits.usb_xor_error = true;
                 return;
             }
@@ -605,24 +604,21 @@ void USB_receive(void) {
             // xor ok -> parse data
             if (((ring_USB_datain.data[last_start] >> 5) & 0b11) == 0b01) {
                 parse_command_for_master(last_start, msg_len(ring_USB_datain, last_start));
-
-                // remove message from buffer -> do not move last_start
-                // (message moves in the buffer itself)
-                ringRemoveFromMiddle((ring_generic*)&ring_USB_datain, last_start, msg_len(ring_USB_datain, last_start));
+				ringRewindEnd(&ring_USB_datain, last_start);
             } else {
                 if (!sense_hist.state) {
-                    ringRemoveFromMiddle((ring_generic*)&ring_USB_datain, last_start, msg_len(ring_USB_datain, last_start));
+					ringRewindEnd(&ring_USB_datain, last_start);
                     master_send_waiting.bits.xn_no_power = true;
                     return;
                 }
 
                 if (!IO_XNPWR_get()) {
-                    ringRemoveFromMiddle((ring_generic*)&ring_USB_datain, last_start, msg_len(ring_USB_datain, last_start));
+					ringRewindEnd(&ring_USB_datain, last_start);
                     master_send_waiting.bits.xn_transistor_closed = true;
                     return;
                 }
 
-                last_start = (last_start + msg_len(ring_USB_datain, last_start)) & ring_USB_datain.max;
+                last_start = (last_start + msg_len(ring_USB_datain, last_start)) % RINGBUF_SIZE;
             }
         }
 
@@ -641,7 +637,7 @@ void USB_receive(void) {
  */
 
 void parse_command_for_master(uint8_t start, uint8_t len) {
-    uint8_t db1 = ring_USB_datain.data[(start + 2) & ring_USB_datain.max];
+    uint8_t db1 = ring_USB_datain.data[(start + 2) % RINGBUF_SIZE];
 
     if ((db1 >> 4) == 0xA) {
         // set master status
@@ -686,12 +682,12 @@ void parse_command_for_master(uint8_t start, uint8_t len) {
  */
 
 void USART_send_next_frame(void) {
-    uint8_t ring_length = ringDistance(ring_USB_datain, ring_USB_datain.ptr_b, ring_USB_datain.ptr_e);
+    uint8_t ring_length = ringDistance(&ring_USB_datain, ring_USB_datain.ptr_b, ring_USB_datain.ptr_e);
 
     // check if there is a message from PC to be sent to XpressNET
     if ((ring_length >= 3) && (ring_length >= msg_len(ring_USB_datain, ring_USB_datain.ptr_b))) {
         // yes -> send the message
-        usart_to_send = (ring_USB_datain.ptr_b + 1) & ring_USB_datain.max;
+        usart_to_send = (ring_USB_datain.ptr_b + 1) % RINGBUF_SIZE;
         XPRESSNET_DIR = XPRESSNET_OUT;
         current_dev.reacted = false; // we do not want USART timeout to overflow
         current_dev.finished = false;
@@ -712,9 +708,9 @@ void USART_send_next_frame(void) {
  */
 void USART_send_rest_of_message(void) {
     USARTWriteByte(0, ring_USB_datain.data[usart_to_send]);
-    usart_to_send = (usart_to_send + 1) & ring_USB_datain.max;
+    usart_to_send = (usart_to_send + 1) % RINGBUF_SIZE;
 
-    if (usart_to_send == ((ring_USB_datain.ptr_b + msg_len(ring_USB_datain, ring_USB_datain.ptr_b)) & ring_USB_datain.max)) {
+    if (usart_to_send == ((ring_USB_datain.ptr_b + msg_len(ring_USB_datain, ring_USB_datain.ptr_b)) % RINGBUF_SIZE)) {
         // last byte sending
 
         ring_USB_datain.ptr_b = usart_to_send; // whole message sent
@@ -787,10 +783,9 @@ void USART_request_next_device(void) {
 
 // Debug function: dump buffer to USB
 void dump_buf_to_USB(ring_generic* buf) {
-    int i;
-    for (i = 0; i <= buf->max; i++)
+    for (uint8_t i = 0; i <= RINGBUF_SIZE; i++)
         USB_Out_Buffer[i] = buf->data[i];
-    putUSBUSART(USB_Out_Buffer, buf->max + 1);
+    putUSBUSART(USB_Out_Buffer, RINGBUF_SIZE);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

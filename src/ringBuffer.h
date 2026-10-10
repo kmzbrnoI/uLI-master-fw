@@ -6,12 +6,13 @@
 #include <inttypes.h>
 #include <stdbool.h>
 
+#define RINGBUF_SIZE 32
+
 typedef struct {
-    uint8_t max;      // Maximmum index (buffer of 8 items has max 7)
     uint8_t ptr_b;    // pointer to begin (for 8 items 0..7)
     uint8_t ptr_e;    // pointer to end (for 8 items 0..7)
-    uint8_t data[32]; // data
-    bool empty;    // wheter buffer is empty
+    uint8_t data[RINGBUF_SIZE]; // data
+    bool empty;       // whether buffer is empty
 } ring_generic;
 
 /* ptr_b points to first byte
@@ -26,30 +27,31 @@ typedef struct {
  * Empty flag must be set when manipulating with ring buffer!
  */
 
+void ringInit(volatile ring_generic* buf);
 void ringAddByte(volatile ring_generic* buf, uint8_t dat);
-uint8_t ringRemoveByte(volatile ring_generic* buf);
-void ringRemoveFrame(volatile ring_generic* buf, uint8_t num);
-uint8_t ringReadByte(volatile ring_generic* buf, uint8_t offset);
+void ringRemoveFrame(volatile ring_generic* buf, uint8_t size);
 void ringSerialize(volatile ring_generic* buf, uint8_t* out, uint8_t start, uint8_t length);
-void ringRemoveFromMiddle(volatile ring_generic* buf, uint8_t start, uint8_t length);
-void ringClear(volatile ring_generic* buf);
-void ringAddToStart(volatile ring_generic* buf, uint8_t* data, uint8_t len);
 void ringRewindEnd(volatile ring_generic* buf, uint8_t end); // rewind buf->ptr_e back to 'end'
 
-#define ringBufferInit(name, size) { \
-    name.max = (size - 1);     \
-    name.ptr_b = 0;            \
-    name.ptr_e = 0;            \
-    name.empty = true; }
+static inline bool ringFull(volatile ring_generic* buf) {
+    return ((buf->ptr_b == buf->ptr_e) && (!buf->empty));
+}
 
-// In some cases, it really matters wheter you call function or not.
-// C18 does not support inline functions -> defines.
+static inline uint8_t ringLength(volatile ring_generic* buf) {
+    return (ringFull(buf)) ? RINGBUF_SIZE : ((buf->ptr_e-buf->ptr_b) % RINGBUF_SIZE);
+}
 
-#define ringLength(buf)                 ((((buf).ptr_e - (buf).ptr_b) & (buf).max) + (!!ringFull(buf) * ((buf).max+1)))
-#define ringFull(buf)                   (((buf).ptr_b == (buf).ptr_e) && (!(buf).empty))
-#define ringEmpty(buf)                  (((buf).ptr_b == (buf).ptr_e) && ((buf).empty))
-#define ringFreeSpace(buf)              (((buf).max+1) - ringLength(buf))
-#define ringDistance(buf,first,second)  ((second-first) & (buf).max)
+static inline bool ringEmpty(volatile ring_generic* buf) {
+    return buf->empty;
+}
+
+static inline uint8_t ringFreeSpace(volatile ring_generic* buf) {
+    return RINGBUF_SIZE - ringLength(buf);
+}
+
+static inline uint8_t ringDistance(volatile ring_generic* buf, uint8_t first, uint8_t second) {
+    return (second-first) % RINGBUF_SIZE;
+}
 
 #endif
 
