@@ -12,9 +12,9 @@ with modified call byte included.
 
 Standard Master ↔ PC message consists of:
 
-|   Call byte   |  Header byte  |  Data byte 1  |  Data byte 2  | ... |  Data byte n  | XOR |
-|---------------|---------------|---------------|---------------|-----|---------------|-----|
-| `0bPDDA AAAA` | `0bTTTT LLLL` | `0bDDDD DDDD` | `0bDDDD DDDD` | ... | `0bDDDD DDDD` | XOR |
+| 0x51 | 0x15 |   Call byte   |  Header byte  |  Data byte 1  |  Data byte 2  | ... |  Data byte n  | XOR |
+|------|------|---------------|---------------|---------------|---------------|-----|---------------|-----|
+| 0x51 | 0x15 | `0bPDDA AAAA` | `0bTTTT LLLL` | `0bDDDD DDDD` | `0bDDDD DDDD` | ... | `0bDDDD DDDD` | XOR |
 
 ## Call byte:
 
@@ -22,8 +22,7 @@ Standard Master ↔ PC message consists of:
  - `DD` : type of message:
    * `0b11` : command for XpressNET device
    * `0b01` : command for Master
- - `AAAAA`: address of XpressNET device. When `DD` = `0b01`, `AAAAA` can be
-   anything.
+ - `AAAAA`: address of XpressNET device. When `DD` = `0b01`, `AAAAA` can be anything.
    `AAAAA` = `0b00000` = broadcast to all XpressNET devices.
 
 ## Header byte
