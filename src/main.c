@@ -38,6 +38,41 @@
 
 #define TIMEOUT_ERR_TIMEOUT     20 // 200 ms
 
+const uint8_t _SLAVE_CALLBYTE[32] = { // callbyte of each slave
+	0x60, // [0] - nonexisting
+	0xE1, // [1]
+	0xE2, // [2]
+	0x63, // [3]
+	0xE4, // [4]
+	0x65, // [5]
+	0x66, // [6]
+	0xE7, // [7]
+	0xE8, // [8]
+	0x69, // [9]
+	0x6A, // [10]
+	0xEB, // [11]
+	0x6C, // [12]
+	0xED, // [13]
+	0xEE, // [14]
+	0x6F, // [15]
+	0xF0, // [16]
+	0x71, // [17]
+	0x72, // [18]
+	0xF3, // [19]
+	0x74, // [20]
+	0xF5, // [21]
+	0xF6, // [22]
+	0x77, // [23]
+	0x78, // [24]
+	0xF9, // [25]
+	0xFA, // [26]
+	0x7B, // [27]
+	0xFC, // [28]
+	0x7D, // [29]
+	0x7E, // [30]
+	0xFF, // [31]
+};
+
 /** VARIABLES *****************************************************************/
 
 uint8_t USB_Out_Buffer[32];
@@ -445,7 +480,6 @@ void USART_receive_interrupt(void) {
     // XOR should be checked in PC.
 
     static nine_data received = { 0, 0 };
-    uint8_t tmp, parity;
 
     usart_timeout = 0;
 
@@ -480,16 +514,7 @@ void USART_receive_interrupt(void) {
 
     if (USART_last_start == ring_USART_datain.ptr_e) {
         // first byte -> add call byte before first byte
-
-        // parity function is inlined (because of speed)
-        parity = 0;
-        if ((tmp = current_dev.index) & 0b1) parity = !parity;
-        if ((tmp = tmp >> 1) & 0b1) parity = !parity;
-        if ((tmp = tmp >> 1) & 0b1) parity = !parity;
-        if ((tmp = tmp >> 1) & 0b1) parity = !parity;
-        if ((tmp = tmp >> 1) & 0b1) parity = !parity;
-
-        ringAddByte(&ring_USART_datain, (uint8_t)(current_dev.index + (0b11 << 5) + (parity << 7)));
+        ringAddByte(&ring_USART_datain, _SLAVE_CALLBYTE[current_dev.index]);
     }
 
     ringAddByte(&ring_USART_datain, received.data);
