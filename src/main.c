@@ -265,17 +265,17 @@ void timer_10ms(void) {
         usb_timeout++;
 
     // keep-alive
-    if ((keep_alive.send) && (keep_alive.send_timer < KA_SEND_INTERVAL)) {
+    if (keep_alive.send) {
         keep_alive.send_timer++;
-        if (keep_alive.send_timer == KA_SEND_INTERVAL) {
+        if (keep_alive.send_timer >= KA_SEND_INTERVAL) {
             keep_alive.send_timer = 0;
             master_send_waiting.bits.keep_alive = true;
         }
     }
 
-    if ((keep_alive.receive) && (keep_alive.receive_timer < KA_RECEIVE_MAX)) {
+    if (keep_alive.receive) {
         keep_alive.receive_timer++;
-        if (keep_alive.receive_timer == KA_RECEIVE_MAX) {
+        if (keep_alive.receive_timer >= KA_RECEIVE_MAX) {
             // computer crashed -> turn the bus off
             IO_XNPWR_set(false);
             resetBus();
