@@ -24,10 +24,10 @@
 
 #define IsRACKRound             (current_dev.round == ROUND_RACK)
 
-#define USART_MAX_TIMEOUT       10 // 500 us
+#define USART_MAX_TIMEOUT       5 // 500 us
 
 #define DEVICE_COUNT            32 // XpressNET device count
-#define NI_TIMEOUT              3 // normal inquiry timeout = 150 us
+#define NI_TIMEOUT              2 // normal inquiry timeout = 200 us
 
 #define MLED_IN_MAX_TIMEOUT      5 // 50 ms
 #define MLED_OUT_MAX_TIMEOUT     5 // 50 ms
@@ -126,7 +126,7 @@ void __interrupt(high_priority) high_isr(void) {
     static volatile uint8_t ten_ms_counter = 0;
 
     if ((PIE1bits.TMR2IE) && (PIR1bits.TMR2IF)) {
-        // Timer2 on 50 us
+        // Timer2 on 100 us
 		if (ireq.t2_elapsed)
 			master_send_waiting.bits.missed_timer = true;
 		ireq.t2_elapsed = true;
@@ -152,7 +152,7 @@ void __interrupt(high_priority) high_isr(void) {
             usart_timeout++;
 
         ten_ms_counter++;
-        if (ten_ms_counter >= 200) {
+        if (ten_ms_counter >= 100) {
             ten_ms_counter = 0;
 			ireq.t_10ms = true;
         }
@@ -254,9 +254,9 @@ void init(void) {
     // Initialize all GPIO
     IO_init();
 
-    // setup timer2 on 50 us
-    T2CONbits.T2CKPS = 0b01; // prescaler 4x
-	PR2 = 150;               // setup timer period register to interrupt every 50 us
+    // setup timer2 on 100 us
+    T2CONbits.T2CKPS = 0b11; // prescaler 16x
+	PR2 = 75;                // setup timer period register to interrupt every 100 us
     TMR2 = 0x00;             // reset timer counter
     PIR1bits.TMR2IF = 0;     // reset overflow flag
     PIE1bits.TMR2IE = 1;     // enable timer2 interrupts
