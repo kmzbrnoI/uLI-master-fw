@@ -26,6 +26,7 @@ void USARTInit(void) {
     RCSTAbits.RX9 = 1; // 9-bit receiving
     TXSTAbits.TXEN = 1; // enable TX
     IPR1bits.RCIP = 1; // receive interrupt high priority
+    IPR1bits.TXIP = 1; // transmit interrupt high priority
     USARTDisableReceive(); // disable RX (enabled by transistor)
 }
 

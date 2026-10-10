@@ -27,7 +27,7 @@
 #define USART_MAX_TIMEOUT       10 // 500 us
 
 #define DEVICE_COUNT            32 // XpressNET device count
-#define NI_TIMEOUT              3 // normal inquiery timeout = 150 us
+#define NI_TIMEOUT              3 // normal inquiry timeout = 150 us
 
 #define MLED_IN_MAX_TIMEOUT      5 // 50 ms
 #define MLED_OUT_MAX_TIMEOUT     5 // 50 ms
@@ -123,17 +123,6 @@ static void USART_send(void);
 /** INTERRUPTS ****************************************************************/
 
 void __interrupt(high_priority) high_isr(void) {
-    // USART send interrupt
-    if ((PIE1bits.TXIE) && (PIR1bits.TXIF))
-        if (sent_callback)
-            sent_callback();
-
-    // USART receive interrupt
-    if (PIR1bits.RCIF)
-        USART_receive_interrupt();
-}
-
-void __interrupt(low_priority) low_isr(void) {
     static volatile uint8_t ten_ms_counter = 0;
 
     if ((PIE1bits.TMR2IE) && (PIR1bits.TMR2IF)) {
@@ -170,6 +159,15 @@ void __interrupt(low_priority) low_isr(void) {
 
         PIR1bits.TMR2IF = 0; // reset overflow flag
     }
+
+    // USART send interrupt
+    if ((PIE1bits.TXIE) && (PIR1bits.TXIF))
+        if (sent_callback)
+            sent_callback();
+
+    // USART receive interrupt
+    if (PIR1bits.RCIF)
+        USART_receive_interrupt();
 }
 
 /** FUNCTIONS *****************************************************************/
@@ -262,7 +260,7 @@ void init(void) {
     TMR2 = 0x00;             // reset timer counter
     PIR1bits.TMR2IF = 0;     // reset overflow flag
     PIE1bits.TMR2IE = 1;     // enable timer2 interrupts
-    IPR1bits.TMR2IP = 0;     // timer2 interrupt low level
+    IPR1bits.TMR2IP = 1;     // timer2 interrupt high priority
     INTCONbits.PEIE = 1;     // Enable peripheral interrupts
     T2CONbits.TMR2ON = 1;    // enable timer2
 
@@ -270,7 +268,7 @@ void init(void) {
     USBDeviceInit();
     USARTInit();
 
-    INTCONbits.GIEL = 1;        // Enable low-level interrupts
+    INTCONbits.GIEL = 0;        // Disable low-level interrupts
     INTCONbits.GIEH = 1;        // Enable high-level interrupts
     RCONbits.IPEN = 1;          // enable all interrupts
 }
@@ -541,7 +539,7 @@ void USB_send(void) {
 		USB_Out_Buffer[1] = 0x15;
         ringSerialize(&ring_USART_datain, USB_Out_Buffer+2, ring_USART_datain.ptr_b, len);
         putUSBUSART(USB_Out_Buffer, len+2);
-        ringRemoveFrame((ring_generic*)&ring_USART_datain, len);
+        ringRemoveFrame(&ring_USART_datain, len);
     }
 }
 
