@@ -94,6 +94,7 @@ volatile uint8_t timeout_err_counter = TIMEOUT_ERR_TIMEOUT;
 static void init(void);
 static void init_devices(void);
 static uint8_t calc_parity(uint8_t data);
+static bool parity(uint8_t byte);
 static void check_device_data_to_USB(void);
 static void timer_10ms(void);
 static uint8_t detect_hw_version(void);
@@ -577,12 +578,7 @@ void USB_receive(void) {
             // while message received
 
             // check for parity
-            bool parity = false;
-            for (uint8_t i = 0; i < 8; i++)
-                if ((ring_USB_datain.data[last_start] >> i) & 1)
-                    parity = !parity;
-
-            if (parity != 0) {
+            if (parity(ring_USB_datain.data[last_start])) {
                 // parity error
 				ringRewindEnd(&ring_USB_datain, last_start);
                 master_send_waiting.bits.usb_parity_error = true;
@@ -798,17 +794,17 @@ void init_devices(void) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+bool parity(uint8_t byte) {
+	bool parity = false;
+	for (uint8_t i = 0; i < 8; i++, byte >>= 1)
+		if (byte & 1)
+			parity = !parity;
+	return parity;
+}
+
 // Calculate parity and return uint8_t with the leftmost parity bit (even parity).
 uint8_t calc_parity(uint8_t data) {
-    uint8_t i, result, parity;
-    parity = 0;
-    result = data;
-    for (i = 0; i < 7; i++) {
-        if ((data & 0x01) == 0x01) { parity = !parity; }
-        data = (data >> 1);
-    }
-    result |= (parity << 7);
-    return result;
+	return parity(data) ? (data | 0x80) : data;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
