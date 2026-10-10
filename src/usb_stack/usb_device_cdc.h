@@ -25,7 +25,6 @@ please contact mla_licensing@microchip.com
 /** I N C L U D E S **********************************************************/
 #include "usb.h"
 #include "usb_config.h"
-#include "ringBuffer.h"
 
 /** D E F I N I T I O N S ****************************************************/
 
@@ -609,7 +608,7 @@ bool USBCDCEventHandler(USB_EVENT event, void *pdata, uint16_t size);
 
 /**********************************************************************************
   Function:
-        uint8_t getsUSBUSART(ring_generic *buffer, uint8_t len)
+        uint8_t getsUSBUSART(uint8_t *data, uint8_t len)
 
   Summary:
     getsUSBUSART copies a string of BYTEs received through USB CDC Bulk OUT
@@ -651,7 +650,7 @@ bool USBCDCEventHandler(USB_EVENT event, void *pdata, uint16_t size);
               indicates that no new CDC bulk OUT endpoint data was available.
 
   **********************************************************************************/
-uint8_t getsUSBUSART(volatile ring_generic *buffer, uint8_t len);
+uint8_t getsUSBUSART(uint8_t *data, uint8_t len);
 
 /******************************************************************************
   Function:

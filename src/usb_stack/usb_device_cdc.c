@@ -483,7 +483,7 @@ bool USBCDCEventHandler(USB_EVENT event, void *pdata, uint16_t size)
     len -     The number of BYTEs expected.
 
   **********************************************************************************/
-uint8_t getsUSBUSART(volatile ring_generic *buffer, uint8_t len)
+uint8_t getsUSBUSART(uint8_t *data, uint8_t len)
 {
     cdc_rx_len = 0;
 
@@ -500,8 +500,7 @@ uint8_t getsUSBUSART(volatile ring_generic *buffer, uint8_t len)
          * Copy data from dual-ram buffer to user's buffer
          */
         for(cdc_rx_len = 0; cdc_rx_len < len; cdc_rx_len++) {
-            //buffer[cdc_rx_len] = cdc_data_rx[cdc_rx_len];
-            ringAddByte(buffer, cdc_data_rx[cdc_rx_len]);
+            data[cdc_rx_len] = cdc_data_rx[cdc_rx_len];
         }
 
         /*
