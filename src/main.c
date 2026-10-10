@@ -547,85 +547,83 @@ void USB_receive(void) {
     if ((USBDeviceState != CONFIGURED_STATE) || (USBIsDeviceSuspended()))
         return;
 
-    if (mUSBUSARTIsTxTrfReady()) {
-        // ring_USB_datain overflow check
-        if (ringFull(&ring_USB_datain)) {
-            // delete last message
+	// ring_USB_datain overflow check
+	if (ringFull(&ring_USB_datain)) {
+		// delete last message
+		ringRewindEnd(&ring_USB_datain, last_start);
+		master_send_waiting.bits.usb_usart_overflow = true;
+		return;
+	}
+
+	uint8_t received_len = getsUSBUSART((ring_generic*)&ring_USB_datain, ringFreeSpace(&ring_USB_datain));
+	if (received_len == 0) {
+		// check for timeout
+		if ((usb_timeout >= USB_MAX_TIMEOUT) && (last_start != ring_USB_datain.ptr_e)) {
 			ringRewindEnd(&ring_USB_datain, last_start);
-            master_send_waiting.bits.usb_usart_overflow = true;
-            return;
-        }
+			master_send_waiting.bits.usb_incoming_timeout = true;
+			usb_timeout = 0;
+		}
+		return;
+	}
 
-        uint8_t received_len = getsUSBUSART((ring_generic*)&ring_USB_datain, ringFreeSpace(&ring_USB_datain));
-        if (received_len == 0) {
-            // check for timeout
-            if ((usb_timeout >= USB_MAX_TIMEOUT) && (last_start != ring_USB_datain.ptr_e)) {
+	// some data received ...
+	usb_timeout = 0;
+
+	// data received -> parse data
+	// at least 3 bytes must be in buffer to start parsing
+	// (call byte + header byte + xor)
+	while ((ringDistance(&ring_USB_datain, last_start, ring_USB_datain.ptr_e) >= 3)
+		&& (USB_last_message_len >= msg_len(ring_USB_datain, last_start))) {
+		// while message received
+
+		// check for parity
+		if (parity(ring_USB_datain.data[last_start])) {
+			// parity error
+			ringRewindEnd(&ring_USB_datain, last_start);
+			master_send_waiting.bits.usb_parity_error = true;
+			return;
+		}
+
+		// check xor
+		uint8_t xor = 0;
+		for (uint8_t i = 0; i < msg_len(ring_USB_datain, last_start) - 1; i++)
+			xor ^= ring_USB_datain.data[(i + last_start + 1) % RINGBUF_SIZE];
+
+		if (xor != 0) {
+			// xor error
+			ringRewindEnd(&ring_USB_datain, last_start);
+			master_send_waiting.bits.usb_xor_error = true;
+			return;
+		}
+
+		// xor ok -> parse data
+		if (((ring_USB_datain.data[last_start] >> 5) & 0b11) == 0b01) {
+			parse_command_for_master(last_start, msg_len(ring_USB_datain, last_start));
+			ringRewindEnd(&ring_USB_datain, last_start);
+		} else {
+			if (!sense_hist.state) {
 				ringRewindEnd(&ring_USB_datain, last_start);
-                master_send_waiting.bits.usb_incoming_timeout = true;
-                usb_timeout = 0;
-            }
-            return;
-        }
+				master_send_waiting.bits.xn_no_power = true;
+				return;
+			}
 
-        // some data received ...
-        usb_timeout = 0;
-
-        // data received -> parse data
-        // at least 3 bytes must be in buffer to start parsing
-        // (call byte + header byte + xor)
-        while ((ringDistance(&ring_USB_datain, last_start, ring_USB_datain.ptr_e) >= 3)
-            && (USB_last_message_len >= msg_len(ring_USB_datain, last_start))) {
-            // while message received
-
-            // check for parity
-            if (parity(ring_USB_datain.data[last_start])) {
-                // parity error
+			if (!IO_XNPWR_get()) {
 				ringRewindEnd(&ring_USB_datain, last_start);
-                master_send_waiting.bits.usb_parity_error = true;
-                return;
-            }
+				master_send_waiting.bits.xn_transistor_closed = true;
+				return;
+			}
 
-            // check xor
-            uint8_t xor = 0;
-            for (uint8_t i = 0; i < msg_len(ring_USB_datain, last_start) - 1; i++)
-                xor ^= ring_USB_datain.data[(i + last_start + 1) % RINGBUF_SIZE];
-
-            if (xor != 0) {
-                // xor error
-				ringRewindEnd(&ring_USB_datain, last_start);
-                master_send_waiting.bits.usb_xor_error = true;
-                return;
-            }
-
-            // xor ok -> parse data
-            if (((ring_USB_datain.data[last_start] >> 5) & 0b11) == 0b01) {
-                parse_command_for_master(last_start, msg_len(ring_USB_datain, last_start));
-				ringRewindEnd(&ring_USB_datain, last_start);
-            } else {
-                if (!sense_hist.state) {
-					ringRewindEnd(&ring_USB_datain, last_start);
-                    master_send_waiting.bits.xn_no_power = true;
-                    return;
-                }
-
-                if (!IO_XNPWR_get()) {
-					ringRewindEnd(&ring_USB_datain, last_start);
-                    master_send_waiting.bits.xn_transistor_closed = true;
-                    return;
-                }
-
-                last_start = (last_start + msg_len(ring_USB_datain, last_start)) % RINGBUF_SIZE;
-            }
-        }
+			last_start = (last_start + msg_len(ring_USB_datain, last_start)) % RINGBUF_SIZE;
+		}
+	}
 
 #ifndef DEBUG
-        // toggle LED
-        if (mLED_Out_Timeout >= 2 * MLED_OUT_MAX_TIMEOUT) {
-            IO_LED_Out_On();
-            mLED_Out_Timeout = 0;
-        }
+	// toggle LED
+	if (mLED_Out_Timeout >= 2 * MLED_OUT_MAX_TIMEOUT) {
+		IO_LED_Out_On();
+		mLED_Out_Timeout = 0;
+	}
 #endif
-    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
