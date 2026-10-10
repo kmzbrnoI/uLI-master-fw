@@ -724,8 +724,6 @@ void USART_send_rest_of_message(void) {
 
 // request next XpressNET device
 void USART_request_next_device(void) {
-    uint32_t tmp = 0;
-
     // 1) pick next device
     current_dev.index++;
     if (current_dev.index >= DEVICE_COUNT) {
@@ -738,7 +736,7 @@ void USART_request_next_device(void) {
     // Are we supposed to send request for acknowledgement (RACK)?
     // Which device are we supposed to send RACK to?
     if (IsRACKRound) {
-        tmp = active_devices >> current_dev.index;
+        uint32_t tmp = active_devices >> current_dev.index;
         if (tmp == 0) {
             // all active devices requested in this round
             current_dev.round = 0;
