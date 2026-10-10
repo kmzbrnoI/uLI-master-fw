@@ -49,6 +49,7 @@ is XOR of *Header byte, Data byte 1 .. Data byte n*.
 | 0xA0      | 0x01        | 0x09        | XOR    | -      | -      | XpressNET power source turned off        |
 | 0xA0      | 0x01        | 0x0A        | XOR    | -      | -      | XpressNET power transistor closed        |
 | 0xA0      | 0x01        | 0x0B        | XOR    | -      | -      | Missed timer warning                     |
+| 0xA0      | 0x01        | 0x0C        | XOR    | -      | -      | USART RX Framing error                   |
 |-----------|-------------|-------------|--------|--------|--------|------------------------------------------|
 | 0xA0      | 0x11        | 0xA 0bNRST  | XOR    | -      | -      | Master status (S = sense, T = transistor, R = keep-alive receiving, N = keep-alive sending)|
 | 0xA0      | 0x13        | 0x80        | 0xHW   | 0xSW   | XOR    | Master SW and HW version response        |
