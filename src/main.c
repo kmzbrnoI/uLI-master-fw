@@ -24,10 +24,10 @@
 
 #define IsRACKRound             (current_dev.round == ROUND_RACK)
 
-#define USART_MAX_TIMEOUT       5 // 500 us
+#define USART_MAX_TIMEOUT       20 // 2000 us
 
 #define DEVICE_COUNT            32 // XpressNET device count
-#define NI_TIMEOUT              2 // normal inquiry timeout = 200 us
+#define NI_TIMEOUT              10 // normal inquiry timeout = 1000 us
 
 #define MLED_IN_MAX_TIMEOUT      5 // 50 ms
 #define MLED_OUT_MAX_TIMEOUT     5 // 50 ms
@@ -78,7 +78,7 @@ uint8_t USB_Out_Buffer[32];
 uint8_t version_hw;
 
 volatile struct {
-	bool t2_elapsed;
+	uint8_t t2_elapsed;
 	bool t_10ms;
 } ireq = {false, };
 
@@ -161,9 +161,9 @@ void __interrupt(high_priority) high_isr(void) {
 
     if ((PIE1bits.TMR2IE) && (PIR1bits.TMR2IF)) {
         // Timer2 on 100 us
-		if (ireq.t2_elapsed)
+		if (ireq.t2_elapsed > 1) // tolerate one missed timer
 			master_send_waiting.bits.missed_timer = true;
-		ireq.t2_elapsed = true;
+		ireq.t2_elapsed++;
 
         // USART currently requested device timeout
         if ((current_dev.timeout > 0) && (current_dev.timeout < NI_TIMEOUT))
@@ -176,10 +176,6 @@ void __interrupt(high_priority) high_isr(void) {
             current_dev.timeout = 0; // device answered -> provide long window
             usart_timeout = 0;
         }
-
-        //if ((usart_last_byte_sent) && (TXSTAbits.TRMT)) { // TODO remove
-        //    XPRESSNET_DIR = XPRESSNET_IN;
-        //}
 
         // usart receive timeout
         if (usart_timeout < USART_MAX_TIMEOUT)
@@ -211,15 +207,14 @@ void main(void) {
     USBDeviceAttach();
 
     while (true) {
-        ireq.t2_elapsed = false;
-
+        ireq.t2_elapsed = 0;
         USBDeviceTasks();
 
         // Normal inquiry answer timeout.
         // This function is not placed in interrupt to serve interrupt as
         // fast as possible.
         if ((current_dev.timeout >= NI_TIMEOUT) && (IO_XNPWR_get()) && (sense_hist.state)) {
-            // device did not answer in 120 us
+            // XpressNET device did not answer
 
 #ifdef RACK_ENABLE
             if (IsRACKRound) {
@@ -241,7 +236,7 @@ void main(void) {
         }
 
         // XpressNET direction is turned to "IN" as soon as possible after last byte was sent to XpressNET.
-        // This is done independently on any callbacks. This needs to be done really fast!
+        // This is done independent on any callbacks. This needs to be done really fast!
         if ((usart_last_byte_sent) && (TXSTAbits.TRMT)) {
             XPRESSNET_DIR = XPRESSNET_IN;
             usart_last_byte_sent = 0;
@@ -674,8 +669,8 @@ void parse_command_for_master(uint8_t* rxBuf, uint8_t len) {
  */
 
 void USART_send_next_frame(void) {
-    uint8_t ring_length = ringDistance(&ring_USB_datain, ring_USB_datain.ptr_b, ring_USB_datain.ptr_e);
-    uint8_t msgLen = (ring_USB_datain.data[(ring_USB_datain.ptr_b + 3) % RINGBUF_SIZE] & 0x0F) + 5;
+    const uint8_t ring_length = ringLength(&ring_USB_datain);
+    const uint8_t msgLen = (ring_USB_datain.data[(ring_USB_datain.ptr_b + 3) % RINGBUF_SIZE] & 0x0F) + 5;
 
     // check if there is a message from PC to be sent to XpressNET
     if ((ring_length >= 5) && (ring_length >= msgLen)) {
@@ -695,9 +690,8 @@ void USART_send_next_frame(void) {
 }
 
 /* SEND REST OF MESSAGE TO USART.
- * This fnction is called as callback (from interrupt!) after a byte is
- * sent to USART. It sends next byte. After last byte is sent,
- * USART_request_next_device is called as callback.
+ * This fnction is called as callback after a byte is sent to USART.
+ * It sends next byte. After last byte is sent, USART_request_next_device is called as callback.
  */
 void USART_send_rest_of_message(void) {
     USARTWriteByte(0, ring_USB_datain.data[usart_to_send]);
