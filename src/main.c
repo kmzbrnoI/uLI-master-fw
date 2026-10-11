@@ -24,10 +24,12 @@
 
 #define IsRACKRound             (current_dev.round == ROUND_RACK)
 
-#define USART_MAX_TIMEOUT       20 // 2000 us
+#define USART_MAX_TIMEOUT       5 // 500 us - timeout between each byte on USART
 
 #define DEVICE_COUNT            32 // XpressNET device count
-#define NI_TIMEOUT              10 // normal inquiry timeout = 1000 us
+#define NI_TIMEOUT              10 // normal inquiry timeout = 1000 us - this timeout is very high, because some
+                                   // throttles like LH100 require response directly after request - before Normal Inquiry.
+                                   // -> manually slow-down devices requiesting to allow PC to respond to throttle's request
 
 #define MLED_IN_MAX_TIMEOUT      5 // 50 ms
 #define MLED_OUT_MAX_TIMEOUT     5 // 50 ms
